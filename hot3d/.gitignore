@@ -1,4 +1,8 @@
 # pixi environments
 .pixi
 # dataset download instruction
-/dataset/**
+/dataset*/**
+/data_downloader/**
+__pycache__/*
+*/__pycache__/*
+*/__pycache__
