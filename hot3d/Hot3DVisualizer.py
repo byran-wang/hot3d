@@ -107,6 +107,8 @@ class Hot3DVisualizer:
 
         # To be parametrized later
         self._jpeg_quality = 75
+        # Keep image rotation intent so we can keep intrinsics in sync
+        self._rotate_image_clockwise = True
 
     def log_static_assets(
         self,
@@ -137,7 +139,25 @@ class Hot3DVisualizer:
                 Hot3DVisualizer.log_pose(
                     f"world/device/{stream_id}", extrinsics, static=True
                 )
-                Hot3DVisualizer.log_calibration(f"world/device/{stream_id}", intrinsics)
+                intrinsics = {
+                    "resolution": [
+                        int(value)
+                        for value in intrinsics.get_image_size()
+                    ],
+                    "focal_length": [
+                        float(value)
+                        for value in intrinsics.get_focal_lengths()
+                    ],
+                    "principal_point": [
+                        float(value)
+                        for value in intrinsics.get_principal_points()
+                    ],
+                }
+                Hot3DVisualizer.log_calibration(
+                    f"world/device/{stream_id}",
+                    intrinsics,
+                    rotate_clockwise_90=self._rotate_image_clockwise,
+                )
 
         # Deal with Aria specifics
         # - Glasses outline
@@ -205,9 +225,9 @@ class Hot3DVisualizer:
         if self._hot3d_data_provider.get_device_type() is Headset.Aria:
             # For each of the stream ids we want to use, export the camera calibration (intrinsics and extrinsics)
             for stream_id in stream_ids:
-                if stream_id != StreamId("214-1"):
-                    # We are only showing the RGB stream camera calibration for Aria
-                    continue
+                # if stream_id != StreamId("214-1"):
+                #     # We are only showing the RGB stream camera calibration for Aria
+                #     continue
                 #
                 # Plot the camera configuration
                 [extrinsics, intrinsics] = (
@@ -232,7 +252,21 @@ class Hot3DVisualizer:
                 )
                 extrinsics = SE3.from_matrix(extrinsics.to_matrix() @ T_rot)
                 Hot3DVisualizer.log_pose(f"world/device/{stream_id}", extrinsics)
-                Hot3DVisualizer.log_calibration(f"world/device/{stream_id}", intrinsics)
+                resolution, focal_length, principal_point = (
+                    Hot3DVisualizer._camera_parameters_for_image(
+                        intrinsics, rotate_clockwise_90=True
+                    )
+                )
+                intrinsics = {
+                    "resolution": resolution,
+                    "focal_length": focal_length,
+                    "principal_point": principal_point,
+                }
+                Hot3DVisualizer.log_calibration(
+                    f"world/device/{stream_id}",
+                    intrinsics,
+                    rotate_clockwise_90=self._rotate_image_clockwise,
+                )
 
         elif self._hot3d_data_provider.get_device_type() is Headset.Quest3:
             ## for Quest devices we will use factory calibration which is a static asset
@@ -310,9 +344,10 @@ class Hot3DVisualizer:
             image_data = self._device_data_provider.get_undistorted_image(
                 timestamp_ns, stream_id
             )
-            # rotate the image by 90 degree
-            image_data = np.rot90(image_data, k=1, axes=(1, 0))
             if image_data is not None:
+                if self._rotate_image_clockwise:
+                    # rotate the image by 90 degree clockwise
+                    image_data = np.rot90(image_data, k=1, axes=(1, 0))
                 rr.log(
                     f"world/device/{stream_id}",
                     rr.Image(image_data).compress(jpeg_quality=self._jpeg_quality),
@@ -415,19 +450,47 @@ class Hot3DVisualizer:
     @staticmethod
     def log_calibration(
         label: str,
-        camera_calibration: CameraCalibration,
+        intrinsics: Dict[str, List[float]],
+        rotate_clockwise_90: bool = False,
     ) -> None:
         rr.log(
             label,
             rr.Pinhole(
-                resolution=[
-                    camera_calibration.get_image_size()[0],
-                    camera_calibration.get_image_size()[1],
-                ],
-                focal_length=float(camera_calibration.get_focal_lengths()[0]),
+                resolution=intrinsics["resolution"],
+                focal_length=intrinsics["focal_length"],
+                principal_point=intrinsics["principal_point"],
             ),
             static=True,
         )
+
+    @staticmethod
+    def _camera_parameters_for_image(
+        camera_calibration: CameraCalibration, rotate_clockwise_90: bool
+    ):
+        width_px, height_px = [
+            int(value) for value in camera_calibration.get_image_size()
+        ]
+        fx, fy = [
+            float(value) for value in camera_calibration.get_focal_lengths()
+        ]
+        cx, cy = [
+            float(value) for value in camera_calibration.get_principal_point()
+        ]
+
+        resolution = [width_px, height_px]
+        focal_length = [fx, fy]
+        principal_point = [cx, cy]
+
+        if rotate_clockwise_90:
+            rotated_resolution = [height_px, width_px]
+            rotated_focal_length = [fy, fx]
+            rotated_principal_point = [
+                float(height_px - 1 - cy),
+                cx,
+            ]
+            return rotated_resolution, rotated_focal_length, rotated_principal_point
+
+        return resolution, focal_length, principal_point
 
     @staticmethod
     def log_pose(label: str, pose: SE3, static=False) -> None:
