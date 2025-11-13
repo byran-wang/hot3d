@@ -143,10 +143,10 @@ class Hot3DVisualizer:
         # - Glasses outline
         # - Point cloud
         if self._hot3d_data_provider.get_device_type() is Headset.Aria:
-            Hot3DVisualizer.log_aria_glasses(
-                "world/device/glasses_outline",
-                self._device_data_provider.get_device_calibration(),
-            )
+            # Hot3DVisualizer.log_aria_glasses(
+            #     "world/device/glasses_outline",
+            #     self._device_data_provider.get_device_calibration(),
+            # )
 
             # Point cloud (downsampled for visualization)
             point_cloud = self._device_data_provider.get_point_cloud()
@@ -193,6 +193,15 @@ class Hot3DVisualizer:
         #
         acceptable_time_delta = 0
 
+        headset_pose3d_with_dt = None
+        if self._device_data_provider is not None:
+            headset_pose3d_with_dt = self._device_pose_provider.get_pose_at_timestamp(
+                timestamp_ns=timestamp_ns,
+                time_query_options=TimeQueryOptions.CLOSEST,
+                time_domain=TimeDomain.TIME_CODE,
+                acceptable_time_delta=acceptable_time_delta,
+            )
+
         if self._hot3d_data_provider.get_device_type() is Headset.Aria:
             # For each of the stream ids we want to use, export the camera calibration (intrinsics and extrinsics)
             for stream_id in stream_ids:
@@ -203,6 +212,12 @@ class Hot3DVisualizer:
                         stream_id=stream_id, timestamp_ns=timestamp_ns
                     )
                 )
+                
+                # extrinsic is from camera to device, we need to change it from camera to world
+                if headset_pose3d_with_dt is not None:
+                    headset_pose3d = headset_pose3d_with_dt.pose3d
+                    extrinsics = headset_pose3d.T_world_device @ extrinsics
+
                 Hot3DVisualizer.log_pose(f"world/device/{stream_id}", extrinsics)
                 Hot3DVisualizer.log_calibration(f"world/device/{stream_id}", intrinsics)
 
@@ -210,14 +225,7 @@ class Hot3DVisualizer:
             ## for Quest devices we will use factory calibration which is a static asset
             pass
 
-        headset_pose3d_with_dt = None
-        if self._device_data_provider is not None:
-            headset_pose3d_with_dt = self._device_pose_provider.get_pose_at_timestamp(
-                timestamp_ns=timestamp_ns,
-                time_query_options=TimeQueryOptions.CLOSEST,
-                time_domain=TimeDomain.TIME_CODE,
-                acceptable_time_delta=acceptable_time_delta,
-            )
+
 
         hand_poses_with_dt = None
         if self._hand_data_provider is not None:
