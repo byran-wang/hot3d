@@ -138,11 +138,14 @@ def execute_rerun(
     # Visualize the dataset sequence
     #
     # Loop over the timestamps of the sequence and visualize corresponding data
-    for timestamp in tqdm(timestamps[timestamps_slice]):
+    for idx, timestamp in enumerate(tqdm(timestamps[timestamps_slice])):
+        if idx != 200:  # for testing purposes only
+            continue
         rr.set_time_nanos("synchronization_time", int(timestamp))
         rr.set_time_sequence("timestamp", timestamp)
 
         rr_visualizer.log_dynamic_assets(image_stream_ids, timestamp)
+        return # for testing purposes only
 
 
 def main():
