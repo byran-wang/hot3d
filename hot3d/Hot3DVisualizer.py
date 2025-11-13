@@ -221,6 +221,16 @@ class Hot3DVisualizer:
                     headset_pose3d = headset_pose3d_with_dt.pose3d
                     extrinsics = headset_pose3d.T_world_device @ extrinsics
 
+                # # rotate matrix which rotates X, Y axis -90 degrees around Z axis
+                T_rot = np.array(
+                    [
+                        [0, 1, 0, 0],
+                        [-1, 0, 0, 0],
+                        [0, 0, 1, 0],
+                        [0, 0, 0, 1],
+                    ]
+                )
+                extrinsics = SE3.from_matrix(extrinsics.to_matrix() @ T_rot)
                 Hot3DVisualizer.log_pose(f"world/device/{stream_id}", extrinsics)
                 Hot3DVisualizer.log_calibration(f"world/device/{stream_id}", intrinsics)
 
@@ -300,6 +310,8 @@ class Hot3DVisualizer:
             image_data = self._device_data_provider.get_undistorted_image(
                 timestamp_ns, stream_id
             )
+            # rotate the image by 90 degree
+            image_data = np.rot90(image_data, k=1, axes=(1, 0))
             if image_data is not None:
                 rr.log(
                     f"world/device/{stream_id}",
