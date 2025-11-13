@@ -267,17 +267,6 @@ class Hot3DVisualizer:
                     intrinsics,
                     rotate_clockwise_90=self._rotate_image_clockwise,
                 )
-                # save the extrinsic and intrinsic in a json file naming "stream_id_calibration.json"
-                calibration_data = {
-                    "extrinsics": extrinsics.to_matrix().tolist(),
-                    "intrinsics": intrinsics,
-                }
-
-                self.stereo_dir = "stereo"
-                import os, json
-                os.makedirs(self.stereo_dir, exist_ok=True)
-                with open(f"{self.stereo_dir}/{stream_id}_calibration.json", "w") as f:
-                    json.dump(calibration_data, f, indent=2)
 
         elif self._hot3d_data_provider.get_device_type() is Headset.Quest3:
             ## for Quest devices we will use factory calibration which is a static asset
@@ -363,13 +352,7 @@ class Hot3DVisualizer:
                     f"world/device/{stream_id}",
                     rr.Image(image_data).compress(jpeg_quality=self._jpeg_quality),
                 )
-            # save the image_data as png file in the self.stereo_dir
-            import os
-            from PIL import Image
-            os.makedirs(self.stereo_dir, exist_ok=True)
-            if image_data is not None:
-                pil_image = Image.fromarray(image_data)
-                pil_image.save(f"{self.stereo_dir}/{stream_id}.png")
+
             # Raw device images (required for object bounding box visualization)
             image_data = self._device_data_provider.get_image(timestamp_ns, stream_id)
             if image_data is not None:
