@@ -205,6 +205,9 @@ class Hot3DVisualizer:
         if self._hot3d_data_provider.get_device_type() is Headset.Aria:
             # For each of the stream ids we want to use, export the camera calibration (intrinsics and extrinsics)
             for stream_id in stream_ids:
+                if stream_id != StreamId("214-1"):
+                    # We are only showing the RGB stream camera calibration for Aria
+                    continue
                 #
                 # Plot the camera configuration
                 [extrinsics, intrinsics] = (
@@ -256,11 +259,11 @@ class Hot3DVisualizer:
         #
         ## Log Device pose
         #
-        if headset_pose3d_with_dt is not None:
-            headset_pose3d = headset_pose3d_with_dt.pose3d
-            Hot3DVisualizer.log_pose(
-                "world/device", headset_pose3d.T_world_device, static=False
-            )
+        # if headset_pose3d_with_dt is not None:
+        #     headset_pose3d = headset_pose3d_with_dt.pose3d
+        #     Hot3DVisualizer.log_pose(
+        #         "world/device", headset_pose3d.T_world_device, static=False
+        #     )
 
         #
         ## Log Hand poses
@@ -367,23 +370,23 @@ class Hot3DVisualizer:
         ## Log device dependent remaining 3D data
         #
 
-        # Log 3D eye gaze
-        if aria_eye_gaze_data is not None:
-            T_device_CPF = self._device_data_provider.get_device_calibration().get_transform_device_cpf()
-            # Compute eye_gaze vector at depth_m (30cm for a proxy 3D vector to display)
-            gaze_vector_in_cpf = get_eyegaze_point_at_depth(
-                aria_eye_gaze_data.yaw, aria_eye_gaze_data.pitch, depth_m=0.3
-            )
-            # Draw EyeGaze vector
-            rr.log(
-                "world/device/eye-gaze",
-                rr.Arrows3D(
-                    origins=[T_device_CPF @ [0, 0, 0]],
-                    vectors=[
-                        T_device_CPF @ gaze_vector_in_cpf - T_device_CPF @ [0, 0, 0]
-                    ],
-                ),
-            )
+        # # Log 3D eye gaze
+        # if aria_eye_gaze_data is not None:
+        #     T_device_CPF = self._device_data_provider.get_device_calibration().get_transform_device_cpf()
+        #     # Compute eye_gaze vector at depth_m (30cm for a proxy 3D vector to display)
+        #     gaze_vector_in_cpf = get_eyegaze_point_at_depth(
+        #         aria_eye_gaze_data.yaw, aria_eye_gaze_data.pitch, depth_m=0.3
+        #     )
+        #     # Draw EyeGaze vector
+        #     rr.log(
+        #         "world/device/eye-gaze",
+        #         rr.Arrows3D(
+        #             origins=[T_device_CPF @ [0, 0, 0]],
+        #             vectors=[
+        #                 T_device_CPF @ gaze_vector_in_cpf - T_device_CPF @ [0, 0, 0]
+        #             ],
+        #         ),
+        #     )
 
     @staticmethod
     def log_aria_glasses(
