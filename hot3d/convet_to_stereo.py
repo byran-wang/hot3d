@@ -127,19 +127,41 @@ def stereo_rectify_pair(
     )
     left_image, left_K = _resize_image_and_intrinsics(left, target_size)
     right_image, right_K = _resize_image_and_intrinsics(right, target_size)
+    # plot the left and right image with plt
+    if 0:
+        import matplotlib.pyplot as plt
+        plt.subplot(1, 2, 1)
+        plt.imshow(cv2.cvtColor(left_image, cv2.COLOR_BGR2RGB))
+        plt.title(f"Left: {left.stream_id}")
+        plt.subplot(1, 2, 2)
+        plt.imshow(cv2.cvtColor(right_image, cv2.COLOR_BGR2RGB))
+        plt.title(f"Right: {right.stream_id}")
+        plt.show()
+    
+    if 0:
+        R_cw_l, t_cw_l = invert_transform(left.extrinsics_world_from_cam)
+        R_cw_r, t_cw_r = invert_transform(right.extrinsics_world_from_cam)
 
-    R_cw_l, t_cw_l = invert_transform(left.extrinsics_world_from_cam)
-    R_cw_r, t_cw_r = invert_transform(right.extrinsics_world_from_cam)
-
-    R = R_cw_r @ np.linalg.inv(R_cw_l)
-    T = (
-        R_cw_r
-        @ (
-            left.extrinsics_world_from_cam[:3, 3]
-            - right.extrinsics_world_from_cam[:3, 3]
-        )
-    ).reshape(3, 1)
-
+        R = R_cw_r @ np.linalg.inv(R_cw_l)
+        T = (
+            R_cw_r
+            @ (
+                left.extrinsics_world_from_cam[:3, 3]
+                - right.extrinsics_world_from_cam[:3, 3]
+            )
+        ).reshape(3, 1)
+    else:
+        def inv_T(T):
+            R, t = T[:3,:3], T[:3,3]
+            Ti = np.eye(4)
+            Ti[:3,:3] = R.T
+            Ti[:3,3]  = -R.T @ t
+            return Ti
+        
+        R_T = inv_T(right.extrinsics_world_from_cam) @ left.extrinsics_world_from_cam
+        R = R_T[:3, :3]
+        T = R_T[:3, 3:].reshape(3, 1)
+        
     R1, R2, P1, P2, Q, _, _ = cv2.stereoRectify(
         cameraMatrix1=left_K,
         distCoeffs1=None,
