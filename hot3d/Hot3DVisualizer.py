@@ -230,7 +230,7 @@ class Hot3DVisualizer:
                 #     continue
                 #
                 # Plot the camera configuration
-                [extrinsics, intrinsics] = (
+                [c2d, intrinsics] = ( # c2d: camera to device
                     self._device_data_provider.get_online_camera_calibration(
                         stream_id=stream_id, timestamp_ns=timestamp_ns
                     )
@@ -238,20 +238,17 @@ class Hot3DVisualizer:
                 
                 # extrinsic is from camera to device, we need to change it from camera to world
                 if headset_pose3d_with_dt is not None:
-                    headset_pose3d = headset_pose3d_with_dt.pose3d
-                    extrinsics = headset_pose3d.T_world_device @ extrinsics
+                    d2w = headset_pose3d_with_dt.pose3d # d2w: device to world
+                    c2w = d2w.T_world_device @ c2d
 
                 # # rotate matrix which rotates X, Y axis -90 degrees around Z axis
-                T_rot = np.array(
-                    [
-                        [0, 1, 0, 0],
+                T_rot = np.array([[0, 1, 0, 0],
                         [-1, 0, 0, 0],
                         [0, 0, 1, 0],
-                        [0, 0, 0, 1],
-                    ]
-                )
-                extrinsics = SE3.from_matrix(extrinsics.to_matrix() @ T_rot)
-                Hot3DVisualizer.log_pose(f"world/device/{stream_id}", extrinsics)
+                        [0, 0, 0, 1],])
+                
+                c2w = SE3.from_matrix(c2w.to_matrix() @ T_rot)
+                Hot3DVisualizer.log_pose(f"world/device/{stream_id}", c2w)
                 resolution, focal_length, principal_point = (
                     Hot3DVisualizer._camera_parameters_for_image(
                         intrinsics, rotate_clockwise_90=True
@@ -265,8 +262,22 @@ class Hot3DVisualizer:
                 Hot3DVisualizer.log_calibration(
                     f"world/device/{stream_id}",
                     intrinsics,
-                    rotate_clockwise_90=self._rotate_image_clockwise,
                 )
+
+                ## Log Image data
+
+                # Undistorted image (required if you want see reprojected 3D mesh on the images)
+                image_data = self._device_data_provider.get_undistorted_image(
+                    timestamp_ns, stream_id
+                )
+                if image_data is not None:
+                    if self._rotate_image_clockwise:
+                        # rotate the image by 90 degree clockwise
+                        image_data = np.rot90(image_data, k=1, axes=(1, 0))
+                    rr.log(
+                        f"world/device/{stream_id}",
+                        rr.Image(image_data).compress(jpeg_quality=self._jpeg_quality),
+                    )                
 
         elif self._hot3d_data_provider.get_device_type() is Headset.Quest3:
             ## for Quest devices we will use factory calibration which is a static asset
@@ -336,22 +347,7 @@ class Hot3DVisualizer:
         ## Log stream dependent data
         #
         for stream_id in stream_ids:
-            #
-            ## Log Image data
-            #
 
-            # Undistorted image (required if you want see reprojected 3D mesh on the images)
-            image_data = self._device_data_provider.get_undistorted_image(
-                timestamp_ns, stream_id
-            )
-            if image_data is not None:
-                if self._rotate_image_clockwise:
-                    # rotate the image by 90 degree clockwise
-                    image_data = np.rot90(image_data, k=1, axes=(1, 0))
-                rr.log(
-                    f"world/device/{stream_id}",
-                    rr.Image(image_data).compress(jpeg_quality=self._jpeg_quality),
-                )
 
             # Raw device images (required for object bounding box visualization)
             image_data = self._device_data_provider.get_image(timestamp_ns, stream_id)
@@ -384,35 +380,35 @@ class Hot3DVisualizer:
             #
             ## Eye Gaze image reprojection
             #
-            if self._hot3d_data_provider.get_device_type() is Headset.Aria:
-                # We are showing EyeGaze reprojection only on the RGB image stream
-                if stream_id != StreamId("214-1"):
-                    continue
+            # if self._hot3d_data_provider.get_device_type() is Headset.Aria:
+            #     # We are showing EyeGaze reprojection only on the RGB image stream
+            #     if stream_id != StreamId("214-1"):
+            #         continue
 
-                # Reproject EyeGaze for raw and pinhole images
-                camera_configurations = [FISHEYE624, LINEAR]
-                for camera_model in camera_configurations:
-                    eye_gaze_reprojection_data = (
-                        self._device_data_provider.get_eye_gaze_in_camera(
-                            stream_id, timestamp_ns, camera_model=camera_model
-                        )
-                    )
-                    if (
-                        eye_gaze_reprojection_data is None
-                        or not eye_gaze_reprojection_data.any()
-                    ):
-                        continue
+            #     # Reproject EyeGaze for raw and pinhole images
+            #     camera_configurations = [FISHEYE624, LINEAR]
+            #     for camera_model in camera_configurations:
+            #         eye_gaze_reprojection_data = (
+            #             self._device_data_provider.get_eye_gaze_in_camera(
+            #                 stream_id, timestamp_ns, camera_model=camera_model
+            #             )
+            #         )
+            #         if (
+            #             eye_gaze_reprojection_data is None
+            #             or not eye_gaze_reprojection_data.any()
+            #         ):
+            #             continue
 
-                    label = (
-                        f"world/device/{stream_id}/eye-gaze_projection"
-                        if camera_model == LINEAR
-                        else f"world/device/{stream_id}_raw/eye-gaze_projection_raw"
-                    )
-                    rr.log(
-                        label,
-                        rr.Points2D(eye_gaze_reprojection_data, radii=20),
-                        # TODO consistent color and size depending of camera resolution
-                    )
+            #         label = (
+            #             f"world/device/{stream_id}/eye-gaze_projection"
+            #             if camera_model == LINEAR
+            #             else f"world/device/{stream_id}_raw/eye-gaze_projection_raw"
+            #         )
+            #         rr.log(
+            #             label,
+            #             rr.Points2D(eye_gaze_reprojection_data, radii=20),
+            #             # TODO consistent color and size depending of camera resolution
+            #         )
         #
         ## Log device dependent remaining 3D data
         #
@@ -451,7 +447,6 @@ class Hot3DVisualizer:
     def log_calibration(
         label: str,
         intrinsics: Dict[str, List[float]],
-        rotate_clockwise_90: bool = False,
     ) -> None:
         rr.log(
             label,
