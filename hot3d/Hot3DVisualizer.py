@@ -12,11 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
+import os
+from pathlib import Path
 from typing import Dict, List, Optional
 
 import matplotlib.pyplot as plt
-
 import numpy as np
+from PIL import Image
 import rerun as rr  # @manual
 
 from data_loaders.hand_common import LANDMARK_CONNECTIVITY
@@ -109,6 +112,7 @@ class Hot3DVisualizer:
         self._jpeg_quality = 75
         # Keep image rotation intent so we can keep intrinsics in sync
         self._rotate_image_clockwise = True
+        self._stereo_output_dir = Path("stereo")
 
     def log_static_assets(
         self,
@@ -255,14 +259,16 @@ class Hot3DVisualizer:
                     timestamp_ns, stream_id
                 )
 
-                if image_data is not None:
-                    if self._rotate_image_clockwise:
+                if self._rotate_image_clockwise:
                         # rotate the image by 90 degree clockwise
                         image_data = np.rot90(image_data, k=1, axes=(1, 0))
-                    rr.log(
-                        f"world/device/{stream_id}",
-                        rr.Image(image_data).compress(jpeg_quality=self._jpeg_quality),
-                    )
+                
+                ## show the image and camera information in rerun
+
+                rr.log(
+                    f"world/device/{stream_id}",
+                    rr.Image(image_data).compress(jpeg_quality=self._jpeg_quality),
+                )
 
                 resolution, focal_length, principal_point = (
                     Hot3DVisualizer._camera_parameters_for_image(
@@ -277,8 +283,23 @@ class Hot3DVisualizer:
                 Hot3DVisualizer.log_calibration(
                     f"world/device/{stream_id}",
                     intrinsics,
-                )                
+                )
 
+                
+                ## save the image and camera information
+                self._stereo_output_dir.mkdir(parents=True, exist_ok=True)
+                image_path = self._stereo_output_dir / f"{stream_id}.png"
+                Hot3DVisualizer._save_image(image_data, image_path)
+
+                calibration_data = {
+                    "extrinsics": c2w.to_matrix().tolist(),
+                    "intrinsics": intrinsics,
+                }
+                calibration_path = (
+                    self._stereo_output_dir / f"{stream_id}_calibration.json"
+                )
+                with calibration_path.open("w", encoding="utf-8") as file:
+                    json.dump(calibration_data, file, indent=2)
         elif self._hot3d_data_provider.get_device_type() is Headset.Quest3:
             ## for Quest devices we will use factory calibration which is a static asset
             pass
@@ -490,6 +511,10 @@ class Hot3DVisualizer:
             return rotated_resolution, rotated_focal_length, rotated_principal_point
 
         return resolution, focal_length, principal_point
+
+    @staticmethod
+    def _save_image(image: np.ndarray, output_path: Path) -> None:
+        Image.fromarray(image).save(output_path)
 
     @staticmethod
     def log_pose(label: str, pose: SE3, static=False) -> None:
