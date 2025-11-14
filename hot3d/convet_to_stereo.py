@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import pickle
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
@@ -47,6 +48,12 @@ def parse_args() -> argparse.Namespace:
         default=0.0,
         help="Stereo rectification zoom parameter passed to cv2.stereoRectify.",
     )
+    parser.add_argument(
+        "--max_size",
+        type=int,
+        default=640,
+        help="Maximum size (width or height) for the output images.",
+    )   
     return parser.parse_args()
 
 
@@ -118,12 +125,13 @@ def stereo_rectify_pair(
     right: CameraData,
     save_dir: Path,
     alpha: float,
+    max_size: int,
 ) -> None:
     save_dir.mkdir(parents=True, exist_ok=True)
 
     target_size = (
-        max(left.image_size[0], right.image_size[0]),
-        max(left.image_size[1], right.image_size[1]),
+        min(max(left.image_size[0], right.image_size[0]), max_size),
+        min(max(left.image_size[1], right.image_size[1]), max_size),
     )
     left_image, left_K = _resize_image_and_intrinsics(left, target_size)
     right_image, right_K = _resize_image_and_intrinsics(right, target_size)
@@ -228,6 +236,20 @@ def stereo_rectify_pair(
     with (save_dir / "rectified_calibration.json").open("w", encoding="utf-8") as file:
         json.dump(metadata, file, indent=2)
 
+    intrinsic_pickle_path = save_dir / "0000.pkl"
+    K = np.array([[fx, 0.0, cx],
+                [0.0, fy, cy],
+                [0.0, 0.0, 1.0],
+        ],dtype=np.float32)
+    with intrinsic_pickle_path.open("wb") as file:
+        pickle.dump(
+            {
+                "stereo_camMat": K.tolist(),
+                "stereo_baseline": baseline,
+            },
+            file,
+        )
+
 
 def main(args: argparse.Namespace) -> None:
     stereo_dir: Path = args.stereo_dir
@@ -250,6 +272,7 @@ def main(args: argparse.Namespace) -> None:
             right=cache[right_id],
             save_dir=pair_dir,
             alpha=args.alpha,
+            max_size=args.max_size,
         )
 
 
