@@ -137,7 +137,6 @@ def stereo_rectify_pair(
         plt.imshow(cv2.cvtColor(right_image, cv2.COLOR_BGR2RGB))
         plt.title(f"Right: {right.stream_id}")
         plt.show()
-    
     if 0:
         R_cw_l, t_cw_l = invert_transform(left.extrinsics_world_from_cam)
         R_cw_r, t_cw_r = invert_transform(right.extrinsics_world_from_cam)
@@ -151,14 +150,7 @@ def stereo_rectify_pair(
             )
         ).reshape(3, 1)
     else:
-        def inv_T(T):
-            R, t = T[:3,:3], T[:3,3]
-            Ti = np.eye(4)
-            Ti[:3,:3] = R.T
-            Ti[:3,3]  = -R.T @ t
-            return Ti
-        
-        R_T = inv_T(right.extrinsics_world_from_cam) @ left.extrinsics_world_from_cam
+        R_T = np.linalg.inv(right.extrinsics_world_from_cam) @ left.extrinsics_world_from_cam
         R = R_T[:3, :3]
         T = R_T[:3, 3:].reshape(3, 1)
         
