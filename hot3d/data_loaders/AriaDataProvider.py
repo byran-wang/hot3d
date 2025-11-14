@@ -36,6 +36,8 @@ from projectaria_tools.core.mps import (  # @manual
 from projectaria_tools.core.sensor_data import TimeDomain, TimeQueryOptions  # @manual
 from projectaria_tools.core.sophus import SE3  # @manual
 from projectaria_tools.core.stream_id import StreamId  # @manual
+from projectaria_tools.core import calibration
+from projectaria_tools.core.image import InterpolationMethod
 
 
 class AriaDataProvider:
@@ -118,25 +120,34 @@ class AriaDataProvider:
     def get_undistorted_image(
         self, timestamp_ns: int, stream_id: StreamId
     ) -> np.ndarray:
+        stream_mappings = {
+            "1201-1": "camera-slam-left",
+            "1201-2": "camera-slam-right",
+            "214-1": "camera-rgb",
+            "211-1": "camera-eyetracking",
+        }
+        camera_name = stream_mappings.get(str(stream_id), "unknown")
+        if camera_name == "unknown":
+            raise ValueError(f"Unknown stream_id: {stream_id} for undistortion")
+
+        if camera_name == "camera-rgb":
+            example_linear_rgb_camera_model_params = [1408, 1408, 550]
+        elif camera_name == "camera-slam-left" or camera_name == "camera-slam-right":
+            example_linear_rgb_camera_model_params = [720, int(720*480/640), 200]
+
         image = self.get_image(timestamp_ns, stream_id)
 
-        [T_device_camera, native_camera_online_calibration] = (
+
+        [T_device_camera, src_calib] = (
             self.get_online_camera_calibration(
                 stream_id, timestamp_ns=timestamp_ns, camera_model=FISHEYE624
             )
         )
-        [T_device_camera, pinhole_camera_online_calibration] = (
-            self.get_online_camera_calibration(
-                stream_id, timestamp_ns=timestamp_ns, camera_model=LINEAR
-            )
-        )
 
-        # Compute the actual undistorted image
-        undistorted_image = distort_by_calibration(
-            image, pinhole_camera_online_calibration, native_camera_online_calibration
-        )
-
-        return undistorted_image
+        dst_calib = calibration.get_linear_camera_calibration(example_linear_rgb_camera_model_params[0], example_linear_rgb_camera_model_params[1], example_linear_rgb_camera_model_params[2], camera_name)
+        undistorted_image = calibration.distort_by_calibration(image, dst_calib, src_calib, InterpolationMethod.BILINEAR)
+        
+        return undistorted_image, dst_calib
 
     def get_device_calibration(self) -> DeviceCalibration:
         """

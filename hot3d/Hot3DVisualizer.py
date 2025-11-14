@@ -249,6 +249,21 @@ class Hot3DVisualizer:
                 
                 c2w = SE3.from_matrix(c2w.to_matrix() @ T_rot)
                 Hot3DVisualizer.log_pose(f"world/device/{stream_id}", c2w)
+
+                # Undistorted image (required if you want see reprojected 3D mesh on the images)
+                image_data, intrinsics = self._device_data_provider.get_undistorted_image(
+                    timestamp_ns, stream_id
+                )
+
+                if image_data is not None:
+                    if self._rotate_image_clockwise:
+                        # rotate the image by 90 degree clockwise
+                        image_data = np.rot90(image_data, k=1, axes=(1, 0))
+                    rr.log(
+                        f"world/device/{stream_id}",
+                        rr.Image(image_data).compress(jpeg_quality=self._jpeg_quality),
+                    )
+
                 resolution, focal_length, principal_point = (
                     Hot3DVisualizer._camera_parameters_for_image(
                         intrinsics, rotate_clockwise_90=True
@@ -262,22 +277,7 @@ class Hot3DVisualizer:
                 Hot3DVisualizer.log_calibration(
                     f"world/device/{stream_id}",
                     intrinsics,
-                )
-
-                ## Log Image data
-
-                # Undistorted image (required if you want see reprojected 3D mesh on the images)
-                image_data = self._device_data_provider.get_undistorted_image(
-                    timestamp_ns, stream_id
-                )
-                if image_data is not None:
-                    if self._rotate_image_clockwise:
-                        # rotate the image by 90 degree clockwise
-                        image_data = np.rot90(image_data, k=1, axes=(1, 0))
-                    rr.log(
-                        f"world/device/{stream_id}",
-                        rr.Image(image_data).compress(jpeg_quality=self._jpeg_quality),
-                    )                
+                )                
 
         elif self._hot3d_data_provider.get_device_type() is Headset.Quest3:
             ## for Quest devices we will use factory calibration which is a static asset
@@ -352,6 +352,10 @@ class Hot3DVisualizer:
             # Raw device images (required for object bounding box visualization)
             image_data = self._device_data_provider.get_image(timestamp_ns, stream_id)
             if image_data is not None:
+                if self._rotate_image_clockwise:
+                    # rotate the image by 90 degree clockwise
+                    image_data = np.rot90(image_data, k=1, axes=(1, 0))
+
                 rr.log(
                     f"world/device/{stream_id}_raw",
                     rr.Image(image_data).compress(jpeg_quality=self._jpeg_quality),
