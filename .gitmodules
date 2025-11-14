@@ -1,0 +1,3 @@
+[submodule "hot3d/third_party/projectaria_tools"]
+	path = hot3d/third_party/projectaria_tools
+	url = git@github.com:facebookresearch/projectaria_tools.git
