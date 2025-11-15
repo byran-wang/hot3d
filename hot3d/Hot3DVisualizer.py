@@ -244,11 +244,8 @@ class Hot3DVisualizer:
                 #     continue
                 #
                 # Plot the camera configuration
-                [c2d, intrinsics] = ( # c2d: camera to device
-                    self._device_data_provider.get_online_camera_calibration(
-                        stream_id=stream_id, timestamp_ns=timestamp_ns
-                    )
-                )
+                # c2d: camera to device
+                [c2d, intrinsics] = self._device_data_provider.get_online_camera_calibration(stream_id=stream_id, timestamp_ns=timestamp_ns)
                 
                 c2w = self._device_data_provider.convert_to_world_space(self._device_pose_provider, timestamp_ns, c2d)
                 c2w, image_data, intrinsics = self._device_data_provider.rotate_90deg_around_z(c2w, stream_id, timestamp_ns, Hot3DVisualizer)
