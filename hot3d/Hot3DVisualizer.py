@@ -259,11 +259,27 @@ class Hot3DVisualizer:
                     timestamp_ns, stream_id
                 )
 
-                if self._rotate_image_clockwise:
-                        # rotate the image by 90 degree clockwise
-                        image_data = np.rot90(image_data, k=1, axes=(1, 0))
-                
-                ## show the image and camera information in rerun
+                if image_data is not None:
+                    # Resize to target resolution while updating intrinsics
+                    ratio = 0.8  # (width, height) should square
+                    src_size = resolution
+                    target_size = [int(src_size[0] * ratio), int(src_size[1] * ratio)]
+                    scale_x = target_size[0] / float(src_size[0])
+                    scale_y = target_size[1] / float(src_size[1])
+                    image_data = cv2.resize(
+                        image_data,
+                        target_size,
+                        interpolation=cv2.INTER_LINEAR,
+                    )
+                    resolution = target_size
+                    focal_length = [
+                        focal_length[0] * scale_x,
+                        focal_length[1] * scale_y,
+                    ]
+                    principal_point = [
+                        principal_point[0] * scale_x,
+                        principal_point[1] * scale_y,
+                    ]
 
                 rr.log(
                     f"world/device/{stream_id}",
