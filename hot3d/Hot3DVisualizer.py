@@ -198,6 +198,22 @@ class Hot3DVisualizer:
         Hot3DVisualizer.log_pose(f"world/device/{stream_id}", c2w)
         Hot3DVisualizer.log_calibration(f"world/device/{stream_id}", intrinsics)
 
+    def save_image_camera(self, image_data, c2w, intrinsics, stream_id: StreamId) -> None:
+        ## save the image and camera information
+        self._stereo_output_dir.mkdir(parents=True, exist_ok=True)
+        image_path = self._stereo_output_dir / f"{stream_id}.png"
+        Hot3DVisualizer._save_image(image_data, image_path)
+
+        calibration_data = {
+            "extrinsics": c2w.to_matrix().tolist(),
+            "intrinsics": intrinsics,
+        }
+        calibration_path = (
+            self._stereo_output_dir / f"{stream_id}_calibration.json"
+        )
+        with calibration_path.open("w", encoding="utf-8") as file:
+            json.dump(calibration_data, file, indent=2)
+        
     def log_dynamic_assets(
         self,
         stream_ids: List[StreamId],
@@ -239,21 +255,9 @@ class Hot3DVisualizer:
                 image_data, intrinsics = self._device_data_provider.scale_image(image_data, intrinsics, ratio=1.0)
 
                 self.log_image_camera(image_data, c2w, intrinsics, stream_id)
+                self.save_image_camera(image_data, c2w, intrinsics, stream_id)
 
-                ## save the image and camera information
-                self._stereo_output_dir.mkdir(parents=True, exist_ok=True)
-                image_path = self._stereo_output_dir / f"{stream_id}.png"
-                Hot3DVisualizer._save_image(image_data, image_path)
 
-                calibration_data = {
-                    "extrinsics": c2w.to_matrix().tolist(),
-                    "intrinsics": intrinsics,
-                }
-                calibration_path = (
-                    self._stereo_output_dir / f"{stream_id}_calibration.json"
-                )
-                with calibration_path.open("w", encoding="utf-8") as file:
-                    json.dump(calibration_data, file, indent=2)
         elif self._hot3d_data_provider.get_device_type() is Headset.Quest3:
             ## for Quest devices we will use factory calibration which is a static asset
             pass
