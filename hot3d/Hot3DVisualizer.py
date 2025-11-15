@@ -193,6 +193,10 @@ class Hot3DVisualizer:
                     rr.Points3D(point_positions, colors=POINT_COLOR, radii=0.002),
                     static=True,
                 )
+    def log_image_camera(self, image_data, c2w, intrinsics, stream_id: StreamId) -> None:
+        rr.log(f"world/device/{stream_id}", rr.Image(image_data).compress(jpeg_quality=self._jpeg_quality))
+        Hot3DVisualizer.log_pose(f"world/device/{stream_id}", c2w)
+        Hot3DVisualizer.log_calibration(f"world/device/{stream_id}", intrinsics)
 
     def log_dynamic_assets(
         self,
@@ -234,17 +238,8 @@ class Hot3DVisualizer:
                 c2w, image_data, intrinsics = self._device_data_provider.rotate_90deg_around_z(c2w, stream_id, timestamp_ns, Hot3DVisualizer)
                 image_data, intrinsics = self._device_data_provider.scale_image(image_data, intrinsics, ratio=1.0)
 
-                rr.log(
-                    f"world/device/{stream_id}",
-                    rr.Image(image_data).compress(jpeg_quality=self._jpeg_quality),
-                )
+                self.log_image_camera(image_data, c2w, intrinsics, stream_id)
 
-                Hot3DVisualizer.log_calibration(
-                    f"world/device/{stream_id}",
-                    intrinsics,
-                )
-
-                
                 ## save the image and camera information
                 self._stereo_output_dir.mkdir(parents=True, exist_ok=True)
                 image_path = self._stereo_output_dir / f"{stream_id}.png"
