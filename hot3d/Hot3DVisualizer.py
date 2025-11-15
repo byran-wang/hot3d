@@ -232,12 +232,12 @@ class Hot3DVisualizer:
                 )
                 
                 c2w = self._device_data_provider.convert_to_world_space(self._device_pose_provider, timestamp_ns, c2d)
-                c2w, image_data, cam_intrinsics = self._device_data_provider.rotate_90deg_around_z(c2w, stream_id, timestamp_ns, Hot3DVisualizer)
+                c2w, image_data, intrinsics = self._device_data_provider.rotate_90deg_around_z(c2w, stream_id, timestamp_ns, Hot3DVisualizer)
 
                 if image_data is not None:
                     # Resize to target resolution while updating intrinsics
                     ratio = 0.8  # (width, height) should square
-                    src_size =  cam_intrinsics["resolution"]
+                    src_size =  intrinsics["resolution"]
                     target_size = [int(src_size[0] * ratio), int(src_size[1] * ratio)]
                     scale_x = target_size[0] / float(src_size[0])
                     scale_y = target_size[1] / float(src_size[1])
@@ -248,12 +248,12 @@ class Hot3DVisualizer:
                     )
                     resolution = target_size
                     focal_length = [
-                        cam_intrinsics["focal_length"][0] * scale_x,
-                        cam_intrinsics["focal_length"][1] * scale_y,
+                        intrinsics["focal_length"][0] * scale_x,
+                        intrinsics["focal_length"][1] * scale_y,
                     ]
                     principal_point = [
-                        cam_intrinsics["principal_point"][0] * scale_x,
-                        cam_intrinsics["principal_point"][1] * scale_y,
+                        intrinsics["principal_point"][0] * scale_x,
+                        intrinsics["principal_point"][1] * scale_y,
                     ]
 
                 rr.log(
