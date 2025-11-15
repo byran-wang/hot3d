@@ -27,7 +27,6 @@ from data_loaders.headsets import Headset
 from data_loaders.loader_hand_poses import HandType
 from data_loaders.loader_object_library import ObjectLibrary
 from projectaria_tools.core.stream_id import StreamId  # @manual
-import cv2
 
 try:
     from dataset_api import Hot3dDataProvider  # @manual
@@ -233,39 +232,13 @@ class Hot3DVisualizer:
                 
                 c2w = self._device_data_provider.convert_to_world_space(self._device_pose_provider, timestamp_ns, c2d)
                 c2w, image_data, intrinsics = self._device_data_provider.rotate_90deg_around_z(c2w, stream_id, timestamp_ns, Hot3DVisualizer)
-
-                if image_data is not None:
-                    # Resize to target resolution while updating intrinsics
-                    ratio = 0.8  # (width, height) should square
-                    src_size =  intrinsics["resolution"]
-                    target_size = [int(src_size[0] * ratio), int(src_size[1] * ratio)]
-                    scale_x = target_size[0] / float(src_size[0])
-                    scale_y = target_size[1] / float(src_size[1])
-                    image_data = cv2.resize(
-                        image_data,
-                        target_size,
-                        interpolation=cv2.INTER_LINEAR,
-                    )
-                    resolution = target_size
-                    focal_length = [
-                        intrinsics["focal_length"][0] * scale_x,
-                        intrinsics["focal_length"][1] * scale_y,
-                    ]
-                    principal_point = [
-                        intrinsics["principal_point"][0] * scale_x,
-                        intrinsics["principal_point"][1] * scale_y,
-                    ]
+                image_data, intrinsics = self._device_data_provider.scale_image(image_data, intrinsics, ratio=1.0)
 
                 rr.log(
                     f"world/device/{stream_id}",
                     rr.Image(image_data).compress(jpeg_quality=self._jpeg_quality),
                 )
 
-                intrinsics = {
-                    "resolution": resolution,
-                    "focal_length": focal_length,
-                    "principal_point": principal_point,
-                }
                 Hot3DVisualizer.log_calibration(
                     f"world/device/{stream_id}",
                     intrinsics,

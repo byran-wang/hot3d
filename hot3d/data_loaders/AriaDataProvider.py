@@ -17,6 +17,7 @@ from typing import Dict, List, Optional
 
 import numpy as np
 from data_loaders.frameset import compute_frameset_for_timestamp
+import cv2
 
 from projectaria_tools.core import data_provider  # @manual
 from projectaria_tools.core.calibration import (  # @manual
@@ -306,6 +307,35 @@ class AriaDataProvider:
             "resolution": resolution,
         }
         return c2w, image_data, cam_intrinsics
+
+    def scale_image(self, image_data: np.ndarray, intrinsics: dict, ratio):
+        # Resize to target resolution while updating intrinsics
+        if ratio == 1.0:
+            return image_data, intrinsics
+        src_size =  intrinsics["resolution"]
+        target_size = [int(src_size[0] * ratio), int(src_size[1] * ratio)]
+        scale_x = target_size[0] / float(src_size[0])
+        scale_y = target_size[1] / float(src_size[1])
+        image_data = cv2.resize(
+            image_data,
+            target_size,
+            interpolation=cv2.INTER_LINEAR,
+        )
+        resolution = target_size
+        focal_length = [
+            intrinsics["focal_length"][0] * scale_x,
+            intrinsics["focal_length"][1] * scale_y,
+        ]
+        principal_point = [
+            intrinsics["principal_point"][0] * scale_x,
+            intrinsics["principal_point"][1] * scale_y,
+        ]
+        cam_intrinsics = {
+            "focal_length": focal_length,
+            "principal_point": principal_point,
+            "resolution": resolution,
+        }
+        return image_data, cam_intrinsics
 
     def _timestamp_convert(
         self, timestamp: int, time_domain_in: TimeDomain, time_domain_out: TimeDomain

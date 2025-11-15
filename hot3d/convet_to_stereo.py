@@ -110,6 +110,7 @@ def _resize_image_and_intrinsics(
     src_w, src_h = camera.image_size
     scale_x = target_w / src_w
     scale_y = target_h / src_h
+    # scale_x and scale_y should be the same according to the ray tracing
 
     resized = cv2.resize(camera.image, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
     scaled_K = camera.intrinsic_matrix.copy()
