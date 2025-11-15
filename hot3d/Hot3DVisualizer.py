@@ -27,6 +27,7 @@ from data_loaders.headsets import Headset
 from data_loaders.loader_hand_poses import HandType
 from data_loaders.loader_object_library import ObjectLibrary
 from projectaria_tools.core.stream_id import StreamId  # @manual
+import cv2
 
 try:
     from dataset_api import Hot3dDataProvider  # @manual
@@ -231,25 +232,12 @@ class Hot3DVisualizer:
                 )
                 
                 c2w = self._device_data_provider.convert_to_world_space(self._device_pose_provider, timestamp_ns, c2d)
-
-                # # rotate matrix which rotates X, Y axis -90 degrees around Z axis
-                T_rot = np.array([[0, 1, 0, 0],
-                        [-1, 0, 0, 0],
-                        [0, 0, 1, 0],
-                        [0, 0, 0, 1],])
-                
-                c2w = SE3.from_matrix(c2w.to_matrix() @ T_rot)
-                Hot3DVisualizer.log_pose(f"world/device/{stream_id}", c2w)
-
-                # Undistorted image (required if you want see reprojected 3D mesh on the images)
-                image_data, intrinsics = self._device_data_provider.get_undistorted_image(
-                    timestamp_ns, stream_id
-                )
+                c2w, image_data, cam_intrinsics = self._device_data_provider.rotate_90deg_around_z(c2w, stream_id, timestamp_ns, Hot3DVisualizer)
 
                 if image_data is not None:
                     # Resize to target resolution while updating intrinsics
                     ratio = 0.8  # (width, height) should square
-                    src_size = resolution
+                    src_size =  cam_intrinsics["resolution"]
                     target_size = [int(src_size[0] * ratio), int(src_size[1] * ratio)]
                     scale_x = target_size[0] / float(src_size[0])
                     scale_y = target_size[1] / float(src_size[1])
@@ -260,12 +248,12 @@ class Hot3DVisualizer:
                     )
                     resolution = target_size
                     focal_length = [
-                        focal_length[0] * scale_x,
-                        focal_length[1] * scale_y,
+                        cam_intrinsics["focal_length"][0] * scale_x,
+                        cam_intrinsics["focal_length"][1] * scale_y,
                     ]
                     principal_point = [
-                        principal_point[0] * scale_x,
-                        principal_point[1] * scale_y,
+                        cam_intrinsics["principal_point"][0] * scale_x,
+                        cam_intrinsics["principal_point"][1] * scale_y,
                     ]
 
                 rr.log(
@@ -273,11 +261,6 @@ class Hot3DVisualizer:
                     rr.Image(image_data).compress(jpeg_quality=self._jpeg_quality),
                 )
 
-                resolution, focal_length, principal_point = (
-                    Hot3DVisualizer._camera_parameters_for_image(
-                        intrinsics, rotate_clockwise_90=True
-                    )
-                )
                 intrinsics = {
                     "resolution": resolution,
                     "focal_length": focal_length,

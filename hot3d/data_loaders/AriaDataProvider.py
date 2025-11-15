@@ -278,6 +278,34 @@ class AriaDataProvider:
 
         return c2w
 
+    def rotate_90deg_around_z(self, c2w: np.ndarray, stream_id, timestamp_ns, Hot3DVisualizer) -> np.ndarray:
+        # # rotate matrix which rotates X, Y axis -90 degrees around Z axis
+        T_rot = np.array([[0, 1, 0, 0],
+                [-1, 0, 0, 0],
+                [0, 0, 1, 0],
+                [0, 0, 0, 1],])
+        
+        c2w = SE3.from_matrix(c2w.to_matrix() @ T_rot)
+        Hot3DVisualizer.log_pose(f"world/device/{stream_id}", c2w)
+
+        # Undistorted image (required if you want see reprojected 3D mesh on the images)
+        image_data, intrinsics = self.get_undistorted_image(
+            timestamp_ns, stream_id
+        )
+
+        image_data = np.rot90(image_data, k=1, axes=(1, 0))
+
+        resolution, focal_length, principal_point = (
+            Hot3DVisualizer._camera_parameters_for_image(
+                intrinsics, rotate_clockwise_90=True
+            )
+        )
+        cam_intrinsics = {
+            "focal_length": focal_length,
+            "principal_point": principal_point,
+            "resolution": resolution,
+        }
+        return c2w, image_data, cam_intrinsics
 
     def _timestamp_convert(
         self, timestamp: int, time_domain_in: TimeDomain, time_domain_out: TimeDomain
