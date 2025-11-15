@@ -260,6 +260,24 @@ class AriaDataProvider:
         # else return the native FISHEYE624 camera model
 
         return [T_device_camera, camera_calibration]
+    
+    def convert_to_world_space(self,
+                               _device_pose_provider, 
+                               timestamp_ns: int, 
+                               c2d: np.ndarray, # camera to device transform
+                               ):
+        headset_pose3d_with_dt = None
+        headset_pose3d_with_dt = _device_pose_provider.get_pose_at_timestamp(
+            timestamp_ns=timestamp_ns,
+            time_query_options=TimeQueryOptions.CLOSEST,
+            time_domain=TimeDomain.TIME_CODE,
+            acceptable_time_delta=0,
+        )
+        d2w = headset_pose3d_with_dt.pose3d # d2w: device to world
+        c2w = d2w.T_world_device @ c2d
+
+        return c2w
+
 
     def _timestamp_convert(
         self, timestamp: int, time_domain_in: TimeDomain, time_domain_out: TimeDomain

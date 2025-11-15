@@ -215,16 +215,6 @@ class Hot3DVisualizer:
         #
         ## Retrieve and log data that is not stream_id dependent (pure 3D data)
         #
-        acceptable_time_delta = 0
-
-        headset_pose3d_with_dt = None
-        if self._device_data_provider is not None:
-            headset_pose3d_with_dt = self._device_pose_provider.get_pose_at_timestamp(
-                timestamp_ns=timestamp_ns,
-                time_query_options=TimeQueryOptions.CLOSEST,
-                time_domain=TimeDomain.TIME_CODE,
-                acceptable_time_delta=acceptable_time_delta,
-            )
 
         if self._hot3d_data_provider.get_device_type() is Headset.Aria:
             # For each of the stream ids we want to use, export the camera calibration (intrinsics and extrinsics)
@@ -240,10 +230,7 @@ class Hot3DVisualizer:
                     )
                 )
                 
-                # extrinsic is from camera to device, we need to change it from camera to world
-                if headset_pose3d_with_dt is not None:
-                    d2w = headset_pose3d_with_dt.pose3d # d2w: device to world
-                    c2w = d2w.T_world_device @ c2d
+                c2w = self._device_data_provider.convert_to_world_space(self._device_pose_provider, timestamp_ns, c2d)
 
                 # # rotate matrix which rotates X, Y axis -90 degrees around Z axis
                 T_rot = np.array([[0, 1, 0, 0],
@@ -328,7 +315,7 @@ class Hot3DVisualizer:
                 timestamp_ns=timestamp_ns,
                 time_query_options=TimeQueryOptions.CLOSEST,
                 time_domain=TimeDomain.TIME_CODE,
-                acceptable_time_delta=acceptable_time_delta,
+                acceptable_time_delta=0,
             )
 
         object_poses_with_dt = None
@@ -338,7 +325,7 @@ class Hot3DVisualizer:
                     timestamp_ns=timestamp_ns,
                     time_query_options=TimeQueryOptions.CLOSEST,
                     time_domain=TimeDomain.TIME_CODE,
-                    acceptable_time_delta=acceptable_time_delta,
+                    acceptable_time_delta=0,
                 )
             )
 
