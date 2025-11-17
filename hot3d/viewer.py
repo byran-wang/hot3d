@@ -139,6 +139,7 @@ def execute_rerun(
     #
     # Initialize the rerun hot3d visualizer interface
     #
+    os.makedirs(out_dir, exist_ok=True)
     rr_visualizer = Hot3DVisualizer(data_provider, hand_enum_type, out_dir=out_dir)
 
     # Define which image stream will be shown
@@ -155,13 +156,13 @@ def execute_rerun(
     #
     # Loop over the timestamps of the sequence and visualize corresponding data
     for idx, timestamp in enumerate(tqdm(timestamps[timestamps_slice])):
-        if idx != 200:  # for testing purposes only
-            continue
+        # if idx != 200:  # for testing purposes only
+        #     continue
         rr.set_time_nanos("synchronization_time", int(timestamp))
         rr.set_time_sequence("timestamp", timestamp)
 
         rr_visualizer.log_dynamic_assets(image_stream_ids, timestamp, frame_idx=idx, headless=headless)
-        return # for testing purposes only
+
 
 
 def main():
