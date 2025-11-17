@@ -27,6 +27,7 @@ from data_loaders.headsets import Headset
 from data_loaders.loader_hand_poses import HandType
 from data_loaders.loader_object_library import ObjectLibrary
 from projectaria_tools.core.stream_id import StreamId  # @manual
+import cv2
 
 try:
     from dataset_api import Hot3dDataProvider  # @manual
@@ -238,6 +239,7 @@ class Hot3DVisualizer:
 
         if self._hot3d_data_provider.get_device_type() is Headset.Aria:
             # For each of the stream ids we want to use, export the camera calibration (intrinsics and extrinsics)
+            cam_infos = {}
             for stream_id in stream_ids:
                 # if stream_id != StreamId("214-1"):
                 #     # We are only showing the RGB stream camera calibration for Aria
@@ -253,6 +255,49 @@ class Hot3DVisualizer:
 
                 self.log_image_camera(image_data, c2w, intrinsics, stream_id)
                 self.save_image_camera(image_data, c2w, intrinsics, stream_id)
+                cam_infos[str(stream_id)] = {
+                    "c2w": c2w,
+                    "intrinsics": intrinsics,
+                    "image": image_data,
+                }
+            breakpoint()
+            cam_pairs = ["1201-1:214-1","214-1:1201-2"]
+            for pair in cam_pairs:
+                left_id, right_id = pair.split(":")
+                image_left = cam_infos[left_id]["image"]
+                image_right = cam_infos[right_id]["image"]
+                
+                intrinsics_left = cam_infos[left_id]["intrinsics"]
+                intrinsics_right = cam_infos[right_id]["intrinsics"]
+                K_left = np.array([[intrinsics_left["focal_length"][0], 0.0, intrinsics_left["principal_point"][0]],
+                                   [0.0, intrinsics_left["focal_length"][1], intrinsics_left["principal_point"][1]],
+                                   [0.0, 0.0, 1.0]])
+                K_right = np.array([[intrinsics_right["focal_length"][0], 0.0, intrinsics_right["principal_point"][0]],
+                                   [0.0, intrinsics_right["focal_length"][1], intrinsics_right["principal_point"][1]],
+                                   [0.0, 0.0, 1.0]])
+                
+                c2w_left = cam_infos[left_id]["c2w"]
+                c2w_right = cam_infos[right_id]["c2w"]
+
+                baseline = (c2w_right.translation()[0] - c2w_left.translation()[0]).reshape(3, 1)
+                dx = baseline / np.linalg.norm(baseline)
+                dz = np.array([0, 0, 1]).reshape(3, 1)
+                dy = np.cross(dz, dx, axisa=0, axisb=0, axisc=0)
+                dz = np.cross(dx, dy, axisa=0, axisb=0, axisc=0)
+
+                rec_l2l = np.eye(4) # from rectified left to raw left
+                rec_l2l[:3, 0] = dx.reshape(3)
+                rec_l2l[:3, 1] = dy.reshape(3)
+                rec_l2l[:3, 2] = dz.reshape(3)
+                
+                # remap the left image with homography
+                H_left = K_left @ rec_l2l[:3, :3] @ np.linalg.inv(K_left)
+                image_left_rect = cv2.warpPerspective(image_left, H_left, (image_left.shape[1], image_left.shape[0]))
+
+                rect_l2w = c2w_left.to_matrix() @ np.linalg.inv(rec_l2l)
+
+                self.log_image_camera(image_left_rect, SE3().from_matrix(rect_l2w), intrinsics_left, f"{left_id}_stereo")
+
 
 
         elif self._hot3d_data_provider.get_device_type() is Headset.Quest3:
