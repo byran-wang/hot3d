@@ -299,7 +299,7 @@ class Hot3DVisualizer:
                                                      [0.0, 0.0, 1.0]])
             intrinsic['stereo_baseline'] = calibration_data['baseline']  # in m
             pickle.dump(intrinsic, file)
-        calibration_path = out_dir / f"pair_calibration.json"
+        calibration_path = out_dir / f"{frame_id}_cali.json"
 
         with calibration_path.open("w", encoding="utf-8") as file:
             json.dump(calibration_data, file, indent=2)  
