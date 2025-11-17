@@ -338,11 +338,11 @@ class Hot3DVisualizer:
                 )
             )
 
-        aria_eye_gaze_data = (
-            self._device_data_provider.get_eye_gaze(timestamp_ns)
-            if self._hot3d_data_provider.get_device_type() is Headset.Aria
-            else None
-        )
+        # aria_eye_gaze_data = (
+        #     self._device_data_provider.get_eye_gaze(timestamp_ns)
+        #     if self._hot3d_data_provider.get_device_type() is Headset.Aria
+        #     else None
+        # )
 
         #
         ## Log Device pose
@@ -394,25 +394,25 @@ class Hot3DVisualizer:
                     rr.Image(image_data).compress(jpeg_quality=self._jpeg_quality),
                 )
 
-            if (
-                self._object_box2d_data_provider is not None
-                and stream_id in self._object_box2d_data_provider.stream_ids
-            ):
-                box2d_collection_with_dt = (
-                    self._object_box2d_data_provider.get_bbox_at_timestamp(
-                        stream_id=stream_id,
-                        timestamp_ns=timestamp_ns,
-                        time_query_options=TimeQueryOptions.CLOSEST,
-                        time_domain=TimeDomain.TIME_CODE,
-                    )
-                )
-                Hot3DVisualizer.log_object_bounding_boxes(
-                    stream_id,
-                    box2d_collection_with_dt,
-                    self._object_box2d_data_provider,
-                    self._object_library,
-                    self._object_box2d_colors,
-                )
+            # if (
+            #     self._object_box2d_data_provider is not None
+            #     and stream_id in self._object_box2d_data_provider.stream_ids
+            # ):
+            #     box2d_collection_with_dt = (
+            #         self._object_box2d_data_provider.get_bbox_at_timestamp(
+            #             stream_id=stream_id,
+            #             timestamp_ns=timestamp_ns,
+            #             time_query_options=TimeQueryOptions.CLOSEST,
+            #             time_domain=TimeDomain.TIME_CODE,
+            #         )
+            #     )
+            #     Hot3DVisualizer.log_object_bounding_boxes(
+            #         stream_id,
+            #         box2d_collection_with_dt,
+            #         self._object_box2d_data_provider,
+            #         self._object_library,
+            #         self._object_box2d_colors,
+            #     )
 
             #
             ## Eye Gaze image reprojection
