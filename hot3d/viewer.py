@@ -144,7 +144,7 @@ def execute_rerun(
         rr.set_time_nanos("synchronization_time", int(timestamp))
         rr.set_time_sequence("timestamp", timestamp)
 
-        rr_visualizer.log_dynamic_assets(image_stream_ids, timestamp)
+        rr_visualizer.log_dynamic_assets(image_stream_ids, timestamp, idx=idx)
         return # for testing purposes only
 
 

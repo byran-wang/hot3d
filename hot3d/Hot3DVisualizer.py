@@ -28,6 +28,7 @@ from data_loaders.loader_hand_poses import HandType
 from data_loaders.loader_object_library import ObjectLibrary
 from projectaria_tools.core.stream_id import StreamId  # @manual
 import cv2
+import pickle
 
 try:
     from dataset_api import Hot3dDataProvider  # @manual
@@ -206,7 +207,7 @@ class Hot3DVisualizer:
         Hot3DVisualizer._save_image(image_data, image_path)
 
         calibration_data = {
-            "extrinsics": c2w.to_matrix().tolist(),
+            "c2w": c2w.to_matrix().tolist(),
             "intrinsics": intrinsics,
         }
         calibration_path = (
@@ -215,10 +216,42 @@ class Hot3DVisualizer:
         with calibration_path.open("w", encoding="utf-8") as file:
             json.dump(calibration_data, file, indent=2)
         
+
+    def save_stereo_image_camera(self, left_img, right_img, left_c2w, right_c2w, l_intrinsic, r_intrinsic, pair, frame_id) -> None:
+        ## save the image and camera information
+        out_dir = self._stereo_output_dir / pair
+        out_dir.mkdir(parents=True, exist_ok=True)
+        left_image_path = out_dir / f"{frame_id}_left.png"
+        right_image_path = out_dir / f"{frame_id}_right.png"
+        intrinsic_path = out_dir / f"0000.pkl"
+        Hot3DVisualizer._save_image(left_img, left_image_path)
+        Hot3DVisualizer._save_image(right_img, right_image_path)
+
+        calibration_data = {
+            "left_c2w": left_c2w.tolist(),
+            "right_c2w": right_c2w.tolist(),
+            "left_intrinsic": l_intrinsic,
+            "right_intrinsic": r_intrinsic,
+            "baseline": np.linalg.norm(right_c2w[:3,3] - left_c2w[:3,3]).item()
+        }
+        # save l_intrinsic to a pickle file
+        with open(intrinsic_path, "wb") as file:
+            intrinsic={}
+            intrinsic['stereo_camMat'] = np.array([[l_intrinsic['focal_length'][0], 0.0, l_intrinsic['principal_point'][0]],
+                                                     [0.0, l_intrinsic['focal_length'][1], l_intrinsic['principal_point'][1]],
+                                                     [0.0, 0.0, 1.0]])
+            intrinsic['stereo_baseline'] = calibration_data['baseline']  # in m
+            pickle.dump(intrinsic, file)
+        calibration_path = out_dir / f"pair_calibration.json"
+
+        with calibration_path.open("w", encoding="utf-8") as file:
+            json.dump(calibration_data, file, indent=2)  
+
     def log_dynamic_assets(
         self,
         stream_ids: List[StreamId],
         timestamp_ns: int,
+        idx: int = None,
     ) -> None:
         """
         Log dynamic assets:
@@ -309,6 +342,7 @@ class Hot3DVisualizer:
                 H_r = K_right @ r2rect_r[:3, :3] @ np.linalg.inv(K_right)
                 image_r_rect = cv2.warpPerspective(image_right, H_r, (image_right.shape[1], image_right.shape[0]))
                 self.log_image_camera(image_r_rect, SE3().from_matrix(rect_r2w), intrinsics_right, f"{right_id}_stereo")
+                self.save_stereo_image_camera(image_l_rect, image_r_rect, rect_l2w, rect_r2w, intrinsics_left, intrinsics_right, f"{left_id}_{right_id}_stereo", frame_id=f"{idx:04d}")
 
 
 
