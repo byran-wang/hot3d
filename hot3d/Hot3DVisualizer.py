@@ -298,7 +298,17 @@ class Hot3DVisualizer:
                 H_l = K_left @ l2rect_l[:3, :3] @ np.linalg.inv(K_left)
                 image_l_rect = cv2.warpPerspective(image_left, H_l, (image_left.shape[1], image_left.shape[0]))
                 self.log_image_camera(image_l_rect, SE3().from_matrix(rect_l2w), intrinsics_left, f"{left_id}_stereo")
-                breakpoint()
+
+                
+                rect_r2rect_l = np.eye(4)
+                rect_r2rect_l[0,3] = baseline
+                rect_r2w = rect_l2w @ rect_r2rect_l
+                rect_r2rect_l = np.linalg.inv(rect_l2w) @ rect_r2w
+                r2rect_r = np.linalg.inv(rect_r2w) @ r2w.to_matrix()
+
+                H_r = K_right @ r2rect_r[:3, :3] @ np.linalg.inv(K_right)
+                image_r_rect = cv2.warpPerspective(image_right, H_r, (image_right.shape[1], image_right.shape[0]))
+                self.log_image_camera(image_r_rect, SE3().from_matrix(rect_r2w), intrinsics_right, f"{right_id}_stereo")
 
 
 
