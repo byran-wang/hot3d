@@ -215,7 +215,63 @@ class Hot3DVisualizer:
         )
         with calibration_path.open("w", encoding="utf-8") as file:
             json.dump(calibration_data, file, indent=2)
+
+    def get_rect_poses(self, pair, cam_infos):
+        left_id, right_id = pair.split(":")
+
         
+        l2w = cam_infos[left_id]["c2w"]
+        r2w = cam_infos[right_id]["c2w"]
+
+        rect_l2w_x = (r2w.translation()[0] - l2w.translation()[0]).reshape(3, 1)
+        baseline = np.linalg.norm(rect_l2w_x) 
+        rect_l2w_x = rect_l2w_x / baseline
+        rect_l2w_z = np.array([0, 0, -1]).reshape(3, 1)
+        rect_l2w_y = np.cross(rect_l2w_z, rect_l2w_x, axisa=0, axisb=0, axisc=0)
+        rect_l2w_z = np.cross(rect_l2w_x, rect_l2w_y, axisa=0, axisb=0, axisc=0)
+
+        rect_l2w = np.eye(4) # from rectified left to raw left
+        rect_l2w[:3, 0] = rect_l2w_x.reshape(3)
+        rect_l2w[:3, 1] = rect_l2w_y.reshape(3)
+        rect_l2w[:3, 2] = rect_l2w_z.reshape(3)
+        rect_l2w[:3, 3] = l2w.translation().reshape(3)
+        l2rect_l =  np.linalg.inv(rect_l2w) @ l2w.to_matrix()
+
+
+        rect_r2rect_l = np.eye(4)
+        rect_r2rect_l[0,3] = baseline
+        rect_r2w = rect_l2w @ rect_r2rect_l
+        rect_r2rect_l = np.linalg.inv(rect_l2w) @ rect_r2w
+        r2rect_r = np.linalg.inv(rect_r2w) @ r2w.to_matrix()
+
+        return l2rect_l, r2rect_r, rect_l2w, rect_r2w
+    
+    def warp_images(self, cam_infos, l2rect_l, r2rect_r, pair):
+        left_id, right_id = pair.split(":")
+
+        image_left = cam_infos[left_id]["image"]
+        image_right = cam_infos[right_id]["image"]
+
+        intrinsics_left = cam_infos[left_id]["intrinsics"]
+        intrinsics_right = cam_infos[right_id]["intrinsics"]
+
+        K_left = np.array([[intrinsics_left["focal_length"][0], 0.0, intrinsics_left["principal_point"][0]],
+                            [0.0, intrinsics_left["focal_length"][1], intrinsics_left["principal_point"][1]],
+                            [0.0, 0.0, 1.0]])
+        K_right = np.array([[intrinsics_right["focal_length"][0], 0.0, intrinsics_right["principal_point"][0]],
+                            [0.0, intrinsics_right["focal_length"][1], intrinsics_right["principal_point"][1]],
+                            [0.0, 0.0, 1.0]])        
+
+        # remap the left image with homography
+        H_l = K_left @ l2rect_l[:3, :3] @ np.linalg.inv(K_left)
+        image_l_rect = cv2.warpPerspective(image_left, H_l, (image_left.shape[1], image_left.shape[0]))
+        
+
+        H_r = K_right @ r2rect_r[:3, :3] @ np.linalg.inv(K_right)
+        image_r_rect = cv2.warpPerspective(image_right, H_r, (image_right.shape[1], image_right.shape[0]))
+
+        return image_l_rect, image_r_rect        
+
 
     def save_stereo_image_camera(self, left_img, right_img, left_c2w, right_c2w, l_intrinsic, r_intrinsic, pair, frame_id) -> None:
         ## save the image and camera information
@@ -251,7 +307,7 @@ class Hot3DVisualizer:
         self,
         stream_ids: List[StreamId],
         timestamp_ns: int,
-        idx: int = None,
+        frame_idx: int = None,
     ) -> None:
         """
         Log dynamic assets:
@@ -294,55 +350,19 @@ class Hot3DVisualizer:
                     "image": image_data,
                 }
             
-            cam_pairs = ["1201-1:214-1"]
-            for pair in cam_pairs:
+            # change the cam_pairs to stereo pairs
+            cam_pairs = ["1201-1:214-1", "214-1:1201-2"]
+            for pair_idx, pair in enumerate(cam_pairs):
                 left_id, right_id = pair.split(":")
-                image_left = cam_infos[left_id]["image"]
-                image_right = cam_infos[right_id]["image"]
-                
                 intrinsics_left = cam_infos[left_id]["intrinsics"]
                 intrinsics_right = cam_infos[right_id]["intrinsics"]
-                K_left = np.array([[intrinsics_left["focal_length"][0], 0.0, intrinsics_left["principal_point"][0]],
-                                   [0.0, intrinsics_left["focal_length"][1], intrinsics_left["principal_point"][1]],
-                                   [0.0, 0.0, 1.0]])
-                K_right = np.array([[intrinsics_right["focal_length"][0], 0.0, intrinsics_right["principal_point"][0]],
-                                   [0.0, intrinsics_right["focal_length"][1], intrinsics_right["principal_point"][1]],
-                                   [0.0, 0.0, 1.0]])
-                
-                l2w = cam_infos[left_id]["c2w"]
-                r2w = cam_infos[right_id]["c2w"]
 
-                rect_l2w_x = (r2w.translation()[0] - l2w.translation()[0]).reshape(3, 1)
-                baseline = np.linalg.norm(rect_l2w_x) 
-                rect_l2w_x = rect_l2w_x / baseline
-                rect_l2w_z = np.array([0, 0, -1]).reshape(3, 1)
-                rect_l2w_y = np.cross(rect_l2w_z, rect_l2w_x, axisa=0, axisb=0, axisc=0)
-                rect_l2w_z = np.cross(rect_l2w_x, rect_l2w_y, axisa=0, axisb=0, axisc=0)
+                l2rect_l, r2rect_r, rect_l2w, rect_r2w = self.get_rect_poses(pair, cam_infos)
+                image_l_rect, image_r_rect = self.warp_images(cam_infos, l2rect_l, r2rect_r, pair)
 
-                rect_l2w = np.eye(4) # from rectified left to raw left
-                rect_l2w[:3, 0] = rect_l2w_x.reshape(3)
-                rect_l2w[:3, 1] = rect_l2w_y.reshape(3)
-                rect_l2w[:3, 2] = rect_l2w_z.reshape(3)
-                rect_l2w[:3, 3] = l2w.translation().reshape(3)
-                l2rect_l =  np.linalg.inv(rect_l2w) @ l2w.to_matrix()
-                
-                
-                # remap the left image with homography
-                H_l = K_left @ l2rect_l[:3, :3] @ np.linalg.inv(K_left)
-                image_l_rect = cv2.warpPerspective(image_left, H_l, (image_left.shape[1], image_left.shape[0]))
-                self.log_image_camera(image_l_rect, SE3().from_matrix(rect_l2w), intrinsics_left, f"{left_id}_stereo")
-
-                
-                rect_r2rect_l = np.eye(4)
-                rect_r2rect_l[0,3] = baseline
-                rect_r2w = rect_l2w @ rect_r2rect_l
-                rect_r2rect_l = np.linalg.inv(rect_l2w) @ rect_r2w
-                r2rect_r = np.linalg.inv(rect_r2w) @ r2w.to_matrix()
-
-                H_r = K_right @ r2rect_r[:3, :3] @ np.linalg.inv(K_right)
-                image_r_rect = cv2.warpPerspective(image_right, H_r, (image_right.shape[1], image_right.shape[0]))
-                self.log_image_camera(image_r_rect, SE3().from_matrix(rect_r2w), intrinsics_right, f"{right_id}_stereo")
-                self.save_stereo_image_camera(image_l_rect, image_r_rect, rect_l2w, rect_r2w, intrinsics_left, intrinsics_right, f"{left_id}_{right_id}_stereo", frame_id=f"{idx:04d}")
+                self.log_image_camera(image_l_rect, SE3().from_matrix(rect_l2w), intrinsics_left, f"{left_id}_pair{pair_idx}")
+                self.log_image_camera(image_r_rect, SE3().from_matrix(rect_r2w), intrinsics_right, f"{right_id}_pair{pair_idx}")
+                self.save_stereo_image_camera(image_l_rect, image_r_rect, rect_l2w, rect_r2w, intrinsics_left, intrinsics_right, f"{left_id}_{right_id}_stereo", frame_id=f"{frame_idx:04d}")
 
 
 
