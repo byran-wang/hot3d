@@ -75,6 +75,7 @@ class Hot3DVisualizer:
         self,
         hot3d_data_provider: Hot3dDataProvider,
         hand_type: HandType = HandType.Umetrack,
+        out_dir: str = "./stereo_output",
     ) -> None:
         self._hot3d_data_provider = hot3d_data_provider
         # Device calibration and Image stream data
@@ -114,7 +115,7 @@ class Hot3DVisualizer:
         self._jpeg_quality = 75
         # Keep image rotation intent so we can keep intrinsics in sync
         self._rotate_image_clockwise = True
-        self._stereo_output_dir = Path("stereo")
+        self._stereo_output_dir = Path(out_dir)
 
     def log_static_assets(
         self,
@@ -308,6 +309,7 @@ class Hot3DVisualizer:
         stream_ids: List[StreamId],
         timestamp_ns: int,
         frame_idx: int = None,
+        headless: bool = False,
     ) -> None:
         """
         Log dynamic assets:
@@ -342,8 +344,10 @@ class Hot3DVisualizer:
                 c2w, image_data, intrinsics = self._device_data_provider.rotate_90deg_around_z(c2w, stream_id, timestamp_ns, Hot3DVisualizer)
                 image_data, intrinsics = self._device_data_provider.scale_image(image_data, intrinsics, ratio=1.0)
 
-                self.log_image_camera(image_data, c2w, intrinsics, stream_id)
-                self.save_image_camera(image_data, c2w, intrinsics, stream_id)
+                if not headless:
+                    self.log_image_camera(image_data, c2w, intrinsics, stream_id)
+                
+                # self.save_image_camera(image_data, c2w, intrinsics, stream_id)
                 cam_infos[str(stream_id)] = {
                     "c2w": c2w,
                     "intrinsics": intrinsics,
@@ -360,9 +364,11 @@ class Hot3DVisualizer:
                 l2rect_l, r2rect_r, rect_l2w, rect_r2w = self.get_rect_poses(pair, cam_infos)
                 image_l_rect, image_r_rect = self.warp_images(cam_infos, l2rect_l, r2rect_r, pair)
 
-                self.log_image_camera(image_l_rect, SE3().from_matrix(rect_l2w), intrinsics_left, f"{left_id}_pair{pair_idx}")
-                self.log_image_camera(image_r_rect, SE3().from_matrix(rect_r2w), intrinsics_right, f"{right_id}_pair{pair_idx}")
-                self.save_stereo_image_camera(image_l_rect, image_r_rect, rect_l2w, rect_r2w, intrinsics_left, intrinsics_right, f"{left_id}_{right_id}_stereo", frame_id=f"{frame_idx:04d}")
+                if not headless:
+                    self.log_image_camera(image_l_rect, SE3().from_matrix(rect_l2w), intrinsics_left, f"{left_id}_pair{pair_idx}")
+                    self.log_image_camera(image_r_rect, SE3().from_matrix(rect_r2w), intrinsics_right, f"{right_id}_pair{pair_idx}")
+                
+                self.save_stereo_image_camera(image_l_rect, image_r_rect, rect_l2w, rect_r2w, intrinsics_left, intrinsics_right, f"{left_id}_{right_id}", frame_id=f"{frame_idx:04d}")
 
 
 
@@ -370,7 +376,8 @@ class Hot3DVisualizer:
             ## for Quest devices we will use factory calibration which is a static asset
             pass
 
-
+        if headless:
+            return
 
         hand_poses_with_dt = None
         if self._hand_data_provider is not None:

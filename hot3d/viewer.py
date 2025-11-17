@@ -69,6 +69,18 @@ def parse_args():
     parser.add_argument(
         "--rrd_output_path", type=str, default=None, help=argparse.SUPPRESS
     )
+    parser.add_argument(
+        "--out_dir",
+        type=str,
+        default="./stereo",
+        help="path to output directory to save stereo images",
+        required=False,
+    )
+    parser.add_argument(
+        "--headless",
+        action='store_true',
+        help="run in headless mode without visualizing in the rerun app",
+    )
 
     return parser.parse_args()
 
@@ -82,6 +94,8 @@ def execute_rerun(
     timestamps_slice: Type[slice],
     fail_on_missing_data: bool,
     hand_type: str,
+    out_dir: str,
+    headless: bool,
 ):
     if not os.path.exists(sequence_folder):
         raise RuntimeError(f"Sequence folder {sequence_folder} does not exist")
@@ -112,11 +126,12 @@ def execute_rerun(
         fail_on_missing_data=fail_on_missing_data,
     )
     print(f"data_provider statistics: {data_provider.get_data_statistics()}")
-
     #
     # Prepare the rerun rerun log configuration
     #
-    rr.init("hot3d Data Viewer", spawn=(rrd_output_path is None))
+    if not headless:
+        rr.init("hot3d Data Viewer", spawn=(rrd_output_path is None))
+    
     if rrd_output_path is not None:
         print(f"Saving .rrd file to {rrd_output_path}")
         rr.save(rrd_output_path)
@@ -124,14 +139,15 @@ def execute_rerun(
     #
     # Initialize the rerun hot3d visualizer interface
     #
-    rr_visualizer = Hot3DVisualizer(data_provider, hand_enum_type)
+    rr_visualizer = Hot3DVisualizer(data_provider, hand_enum_type, out_dir=out_dir)
 
     # Define which image stream will be shown
     image_stream_ids = data_provider.device_data_provider.get_image_stream_ids()
 
     #
     # Log static assets (aka Timeless assets)
-    rr_visualizer.log_static_assets(image_stream_ids)
+    if not headless:
+        rr_visualizer.log_static_assets(image_stream_ids)
 
     timestamps = data_provider.device_data_provider.get_sequence_timestamps()
     #
@@ -144,14 +160,13 @@ def execute_rerun(
         rr.set_time_nanos("synchronization_time", int(timestamp))
         rr.set_time_sequence("timestamp", timestamp)
 
-        rr_visualizer.log_dynamic_assets(image_stream_ids, timestamp, frame_idx=idx)
+        rr_visualizer.log_dynamic_assets(image_stream_ids, timestamp, frame_idx=idx, headless=headless)
         return # for testing purposes only
 
 
 def main():
     args = parse_args()
     print(f"args provided: {args}")
-
     try:
         execute_rerun(
             sequence_folder=args.sequence_folder,
@@ -162,6 +177,8 @@ def main():
             timestamps_slice=slice(None, None, None),
             fail_on_missing_data=False,
             hand_type=args.hand_type,
+            out_dir=args.out_dir,
+            headless=args.headless
         )
     except Exception as error:
         print(f"An exception occurred: {error}")
