@@ -116,6 +116,15 @@ class Hot3DVisualizer:
         # Keep image rotation intent so we can keep intrinsics in sync
         self._rotate_image_clockwise = True
         self._stereo_output_dir = Path(out_dir)
+        self._pre_c2w = None
+
+    def save_invalid_frames(self, frame_idx) -> None:
+        """
+        Save the invalid frames to a text file
+        """
+        invalid_frames_file = os.path.join(self._stereo_output_dir, "invalid_frames.txt")
+        with open(invalid_frames_file, "a", encoding="utf-8") as file:
+            file.write(f"{frame_idx}\n")
 
     def log_static_assets(
         self,
@@ -343,8 +352,10 @@ class Hot3DVisualizer:
                 
                 c2w = self._device_data_provider.convert_to_world_space(self._device_pose_provider, timestamp_ns, c2d)
                 if c2w is None:
-                    print(f"[Warning]: c2w not found for stream_id: {stream_id} at timestamp_ns: {timestamp_ns}")
-                    return
+                    print(f"[Warning]: c2w not found for stream_id: {stream_id} at timestamp_ns: {timestamp_ns}, using previous c2w")
+                    self.save_invalid_frames(frame_idx)
+                    c2w = self._pre_c2w
+                self._pre_c2w = c2w
                 c2w, image_data, intrinsics = self._device_data_provider.rotate_90deg_around_z(c2w, stream_id, timestamp_ns, Hot3DVisualizer)
                 image_data, intrinsics = self._device_data_provider.scale_image(image_data, intrinsics, ratio=1.0)
 
