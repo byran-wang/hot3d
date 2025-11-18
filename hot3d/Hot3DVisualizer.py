@@ -201,10 +201,11 @@ class Hot3DVisualizer:
         Hot3DVisualizer.log_pose(f"world/device/{stream_id}", c2w)
         Hot3DVisualizer.log_calibration(f"world/device/{stream_id}", intrinsics)
 
-    def save_image_camera(self, image_data, c2w, intrinsics, stream_id: StreamId) -> None:
+    def save_image_camera(self, image_data, c2w, intrinsics, stream_id: StreamId, frame_idx: str) -> None:
         ## save the image and camera information
         self._stereo_output_dir.mkdir(parents=True, exist_ok=True)
-        image_path = self._stereo_output_dir / f"{stream_id}.png"
+        image_path = self._stereo_output_dir / f"../undistorted/{stream_id}_{frame_idx}.png"
+        os.makedirs(os.path.dirname(image_path), exist_ok=True)
         Hot3DVisualizer._save_image(image_data, image_path)
 
         calibration_data = {
@@ -212,7 +213,7 @@ class Hot3DVisualizer:
             "intrinsics": intrinsics,
         }
         calibration_path = (
-            self._stereo_output_dir / f"{stream_id}_calibration.json"
+            self._stereo_output_dir / f"../undistorted/{stream_id}_{frame_idx}_cali.json"
         )
         with calibration_path.open("w", encoding="utf-8") as file:
             json.dump(calibration_data, file, indent=2)
@@ -347,7 +348,7 @@ class Hot3DVisualizer:
                 if not headless:
                     self.log_image_camera(image_data, c2w, intrinsics, stream_id)
                 
-                # self.save_image_camera(image_data, c2w, intrinsics, stream_id)
+                self.save_image_camera(image_data, c2w, intrinsics, stream_id, frame_idx=f"{frame_idx:04d}")
                 cam_infos[str(stream_id)] = {
                     "c2w": c2w,
                     "intrinsics": intrinsics,
