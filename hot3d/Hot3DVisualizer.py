@@ -342,6 +342,9 @@ class Hot3DVisualizer:
                 [c2d, intrinsics] = self._device_data_provider.get_online_camera_calibration(stream_id=stream_id, timestamp_ns=timestamp_ns)
                 
                 c2w = self._device_data_provider.convert_to_world_space(self._device_pose_provider, timestamp_ns, c2d)
+                if c2w is None:
+                    print(f"[Warning]: c2w not found for stream_id: {stream_id} at timestamp_ns: {timestamp_ns}")
+                    return
                 c2w, image_data, intrinsics = self._device_data_provider.rotate_90deg_around_z(c2w, stream_id, timestamp_ns, Hot3DVisualizer)
                 image_data, intrinsics = self._device_data_provider.scale_image(image_data, intrinsics, ratio=1.0)
 

@@ -274,6 +274,9 @@ class AriaDataProvider:
             time_domain=TimeDomain.TIME_CODE,
             acceptable_time_delta=0,
         )
+        if headset_pose3d_with_dt is None:
+            print(f"[Warning]: headset pose not found at timestamp_ns: {timestamp_ns}")
+            return None
         d2w = headset_pose3d_with_dt.pose3d # d2w: device to world
         c2w = d2w.T_world_device @ c2d
 
