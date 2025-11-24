@@ -21,6 +21,7 @@ setup_for_hands = """
 # See chumpy https://github.com/mattloper/chumpy/issues/55
 
 viewer = "python3 viewer.py"
+viewer_stereo = "python3 viewer_stereo.py"
 
 [dependencies]
 pip = "*"
