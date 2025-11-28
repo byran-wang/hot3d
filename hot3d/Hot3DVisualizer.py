@@ -314,6 +314,72 @@ class Hot3DVisualizer:
         with calibration_path.open("w", encoding="utf-8") as file:
             json.dump(calibration_data, file, indent=2)  
 
+    @staticmethod
+    def _pose_to_json_dict(pose: SE3) -> Dict[str, List[float]]:
+        quat_and_translation = np.asarray(pose.to_quat_and_translation()).reshape(-1, 7)[0]
+        return {
+            "q_wxyz": [float(v) for v in quat_and_translation[:4]],
+            "t_xyz": [float(v) for v in quat_and_translation[4:]],
+            "matrix": pose.to_matrix().tolist(),
+        }
+
+    def save_hand_poses(self, hand_poses_with_dt: Optional[HandPose3dCollectionWithDt], frame_idx: str, query_timestamp_ns: int) -> None:
+        hand_pose_dir = self._stereo_output_dir / "hand_poses"
+        hand_pose_dir.mkdir(parents=True, exist_ok=True)
+        payload: Dict[str, Optional[Dict]] = {
+            "query_timestamp_ns": int(query_timestamp_ns),
+            "timestamp_ns": None,
+            "time_delta_ns": None,
+            "hand_poses": None,
+        }
+
+        if hand_poses_with_dt is not None:
+            payload["timestamp_ns"] = int(hand_poses_with_dt.pose3d_collection.timestamp_ns)
+            payload["time_delta_ns"] = int(hand_poses_with_dt.time_delta_ns)
+            hands: Dict[str, Dict] = {}
+            for hand_pose in hand_poses_with_dt.pose3d_collection.poses.values():
+                wrist_pose = (
+                    Hot3DVisualizer._pose_to_json_dict(hand_pose.wrist_pose)
+                    if hand_pose.wrist_pose is not None
+                    else None
+                )
+                hands[str(hand_pose.handedness.value)] = {
+                    "handedness": hand_pose.handedness.name.lower(),
+                    "wrist_pose": wrist_pose,
+                    "joint_angles": hand_pose.joint_angles,
+                }
+            payload["hand_poses"] = hands
+
+        hand_pose_path = hand_pose_dir / f"{frame_idx}.json"
+        with hand_pose_path.open("w", encoding="utf-8") as file:
+            json.dump(payload, file, indent=2)
+
+    def save_object_poses(self, object_poses_with_dt: Optional[ObjectPose3dCollectionWithDt], frame_idx: str, query_timestamp_ns: int) -> None:
+        object_pose_dir = self._stereo_output_dir / "object_poses"
+        object_pose_dir.mkdir(parents=True, exist_ok=True)
+        payload: Dict[str, Optional[Dict]] = {
+            "query_timestamp_ns": int(query_timestamp_ns),
+            "timestamp_ns": None,
+            "time_delta_ns": None,
+            "objects": None,
+        }
+
+        if object_poses_with_dt is not None:
+            payload["timestamp_ns"] = int(object_poses_with_dt.pose3d_collection.timestamp_ns)
+            payload["time_delta_ns"] = int(object_poses_with_dt.time_delta_ns)
+            objects: Dict[str, Dict] = {}
+            for object_uid, object_pose in object_poses_with_dt.pose3d_collection.poses.items():
+                objects[str(object_uid)] = {
+                    "T_world_object": Hot3DVisualizer._pose_to_json_dict(object_pose.T_world_object)
+                    if object_pose.T_world_object is not None
+                    else None
+                }
+            payload["objects"] = objects
+
+        object_pose_path = object_pose_dir / f"{frame_idx}.json"
+        with object_pose_path.open("w", encoding="utf-8") as file:
+            json.dump(payload, file, indent=2)
+
     def log_dynamic_assets(
         self,
         stream_ids: List[StreamId],
@@ -391,8 +457,7 @@ class Hot3DVisualizer:
             ## for Quest devices we will use factory calibration which is a static asset
             pass
 
-        if headless:
-            return
+
 
         hand_poses_with_dt = None
         if self._hand_data_provider is not None:
@@ -413,6 +478,12 @@ class Hot3DVisualizer:
                     acceptable_time_delta=0,
                 )
             )
+
+        self.save_hand_poses(hand_poses_with_dt, frame_idx=f"{frame_idx:04d}", query_timestamp_ns=timestamp_ns)
+        self.save_object_poses(object_poses_with_dt, frame_idx=f"{frame_idx:04d}", query_timestamp_ns=timestamp_ns)
+
+        if headless:
+            return            
 
         # aria_eye_gaze_data = (
         #     self._device_data_provider.get_eye_gaze(timestamp_ns)

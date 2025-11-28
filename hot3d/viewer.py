@@ -156,8 +156,8 @@ def execute_rerun(
     #
     # Loop over the timestamps of the sequence and visualize corresponding data
     for idx, timestamp in enumerate(tqdm(timestamps[timestamps_slice])):
-        if idx != 200:  # for testing purposes only
-            continue
+        # if idx != 200:  # for testing purposes only
+        #     continue
         rr.set_time_nanos("synchronization_time", int(timestamp))
         rr.set_time_sequence("timestamp", timestamp)
 
