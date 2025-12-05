@@ -132,9 +132,9 @@ class AriaDataProvider:
             raise ValueError(f"Unknown stream_id: {stream_id} for undistortion")
 
         if camera_name == "camera-rgb":
-            example_linear_rgb_camera_model_params = [1024, 1024, 300]
+            example_linear_rgb_camera_model_params = [1024, 1024, 350]
         elif camera_name == "camera-slam-left" or camera_name == "camera-slam-right":
-            example_linear_rgb_camera_model_params = [1024, 1024, 300]
+            example_linear_rgb_camera_model_params = [1024, 1024, 350]
 
         image = self.get_image(timestamp_ns, stream_id)
 
