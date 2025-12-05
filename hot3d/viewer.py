@@ -81,6 +81,13 @@ def parse_args():
         action='store_true',
         help="run in headless mode without visualizing in the rerun app",
     )
+    parser.add_argument(
+        "--interval",
+        type=int,
+        default=1,
+        help="interval between frames to process and save",
+        required=False,
+    )
 
     return parser.parse_args()
 
@@ -96,6 +103,7 @@ def execute_rerun(
     hand_type: str,
     out_dir: str,
     headless: bool,
+    interval: int,
 ):
     if not os.path.exists(sequence_folder):
         raise RuntimeError(f"Sequence folder {sequence_folder} does not exist")
@@ -158,8 +166,11 @@ def execute_rerun(
     for idx, timestamp in enumerate(tqdm(timestamps[timestamps_slice])):
         # if idx != 200:  # for testing purposes only
         #     continue
-        rr.set_time_nanos("synchronization_time", int(timestamp))
-        rr.set_time_sequence("timestamp", timestamp)
+        # rr.set_time_nanos("synchronization_time", int(timestamp))
+        # rr.set_time_sequence("timestamp", timestamp)
+        if idx % interval != 0:
+            continue
+        rr.set_time_sequence("frame", idx)
 
         rr_visualizer.log_dynamic_assets(image_stream_ids, timestamp, frame_idx=idx, headless=headless)
 
@@ -179,7 +190,8 @@ def main():
             fail_on_missing_data=False,
             hand_type=args.hand_type,
             out_dir=args.out_dir,
-            headless=args.headless
+            headless=args.headless,
+            interval=args.interval,
         )
     except Exception as error:
         print(f"An exception occurred: {error}")
