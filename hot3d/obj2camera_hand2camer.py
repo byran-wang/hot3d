@@ -19,7 +19,19 @@ def main(args):
     data_dir = Path(args.data_dir)
     obj_assets_dir = data_dir.parents[2] / "assets"
     mano_model_dir = data_dir.parents[2] / "body_models"
+    invalid_path = data_dir / "invalid_frames.txt"
     mano_model = loadManoHandModel(str(mano_model_dir))
+    invalid_frames = set()
+    if invalid_path.exists():
+        with invalid_path.open("r") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    invalid_frames.add(int(line))
+                except ValueError:
+                    continue
     image_paths = sorted(
         (path for path in data_dir.glob("214-1_*.png") if path.is_file()),
         key=lambda path: path.name,
@@ -35,9 +47,15 @@ def main(args):
     for idx, (image_path, cali_path, obj_pose_path, hand_pose_path) in enumerate(
         zip(image_paths, cali_paths, obj_pose_paths, hand_pose_paths)
     ):
-
         if idx % args.interval != 0:
+            continue        
+        frame_num = None
+        stem_parts = image_path.stem.split("_")
+        if stem_parts and stem_parts[-1].isdigit():
+            frame_num = int(stem_parts[-1])
+        if frame_num is not None and frame_num in invalid_frames:
             continue
+        
         vis.set_time_sequence(idx)
         print(f"visualizing frame {idx}: {image_path.name}")
         with cali_path.open("r") as f:
