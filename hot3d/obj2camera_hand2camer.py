@@ -20,6 +20,7 @@ def main(args):
     )
     cali_paths = [image_paths[0].parent / f"{image_path.stem}_cali.json" for image_path in image_paths]
     obj_pose_paths = [image_path.parent / f"object_poses/{image_path.stem.replace('214-1_', '')}.json" for image_path in image_paths]
+    hand_pose_paths = [image_path.parent / f"hand_poses/{image_path.stem.replace('214-1_', '')}.json" for image_path in image_paths]
 
     vis = Visualizer(viewer_name="hot3d_in_camera", jpeg_quality=30)
     vis.log_axis("world", scale=0.1)
@@ -41,9 +42,10 @@ def main(args):
         cx, cy = intrinsics["principal_point"]
         resolution = intrinsics["resolution"]
         k_mat = np.array([[fx, 0.0, cx], [0.0, fy, cy], [0.0, 0.0, 1.0]], dtype=float)
+        w2c = np.linalg.inv(c2w)
 
         vis.log_image("world/image", str(image_path), static=False)
-        vis.log_cam_pose("world/image", c2w, static=False)
+        vis.log_cam_pose("world/image", np.eye(4), static=False)
         vis.log_calibration("world/image", resolution, k_mat, static=False)
         if not obj_assets_dir.exists():
             print(f"[Warning] Object assets directory {obj_assets_dir} does not exist, skipping object visualization.")
@@ -56,12 +58,14 @@ def main(args):
             obj_label = f"world/object/{obj_id}"
             mesh_path = obj_assets_dir / f"{obj_id}.glb"
             o2w = np.asarray(obj_info["T_world_object"]["matrix"], dtype=float)
+            o2c = w2c @ o2w
             if mesh_path.exists():
                 mesh = trimesh.load(mesh_path)
                 if not isinstance(mesh, trimesh.Trimesh):
                     mesh = mesh.dump().sum()
                 vertices = mesh.vertices
-                vertices = (o2w[:3, :3] @ vertices.T + o2w[:3, 3:4]).T
+                # vertices = (o2w[:3, :3] @ vertices.T + o2w[:3, 3:4]).T
+                vertices = (o2c[:3, :3] @ vertices.T + o2c[:3, 3:4]).T
                 faces = mesh.faces
                 if faces.shape[0] > 0:
                     keep = int(faces.shape[0] * 0.5)
