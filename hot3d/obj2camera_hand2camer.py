@@ -5,15 +5,21 @@ from pathlib import Path
 import numpy as np
 import rerun as rr
 import trimesh
+import torch
 
 import sys
 sys.path.append("./third_party/utils_simba")
 from utils_simba.rerun import Visualizer
+from data_loaders.mano_layer import loadManoHandModel
+from data_loaders.pytorch3d_rotation.rotation_conversions import matrix_to_axis_angle
+from data_loaders.HandDataProviderBase import HandDataProviderBase
 
 
 def main(args):
     data_dir = Path(args.data_dir)
     obj_assets_dir = data_dir.parents[2] / "assets"
+    mano_model_dir = data_dir.parents[2] / "body_models"
+    mano_model = loadManoHandModel(str(mano_model_dir))
     image_paths = sorted(
         (path for path in data_dir.glob("214-1_*.png") if path.is_file()),
         key=lambda path: path.name,
@@ -26,8 +32,9 @@ def main(args):
     vis.log_axis("world", scale=0.1)
     logged_meshes = set()
 
-    for idx, (image_path, cali_path, obj_pose_path) in enumerate(zip(image_paths, cali_paths, obj_pose_paths)):
-
+    for idx, (image_path, cali_path, obj_pose_path, hand_pose_path) in enumerate(
+        zip(image_paths, cali_paths, obj_pose_paths, hand_pose_paths)
+    ):
 
         if idx % args.interval != 0:
             continue
@@ -45,6 +52,7 @@ def main(args):
         w2c = np.linalg.inv(c2w)
 
         vis.log_image("world/image", str(image_path), static=False)
+        # vis.log_cam_pose("world/image", c2w, static=False)
         vis.log_cam_pose("world/image", np.eye(4), static=False)
         vis.log_calibration("world/image", resolution, k_mat, static=False)
         if not obj_assets_dir.exists():
@@ -64,8 +72,17 @@ def main(args):
                 if not isinstance(mesh, trimesh.Trimesh):
                     mesh = mesh.dump().sum()
                 vertices = mesh.vertices
+                obj_normals = mesh.vertex_normals
+                obj_colors = None
+                if (
+                    hasattr(mesh, "visual")
+                    and mesh.visual.kind == "vertex"
+                    and mesh.visual.vertex_colors is not None
+                ):
+                    obj_colors = np.asarray(mesh.visual.vertex_colors)
                 # vertices = (o2w[:3, :3] @ vertices.T + o2w[:3, 3:4]).T
                 vertices = (o2c[:3, :3] @ vertices.T + o2c[:3, 3:4]).T
+                obj_normals = (o2c[:3, :3] @ obj_normals.T).T
                 faces = mesh.faces
                 if faces.shape[0] > 0:
                     keep = int(faces.shape[0] * 0.5)
@@ -76,12 +93,50 @@ def main(args):
                 if 1:
                     rr.log(
                         f"{obj_label}/mesh",
-                        rr.Mesh3D(vertex_positions=vertices, triangle_indices=faces),
+                        rr.Mesh3D(
+                            vertex_positions=vertices,
+                            triangle_indices=faces,
+                            vertex_normals=obj_normals,
+                            vertex_colors=obj_colors,
+                        ),
                         static=False,
                     )
                 logged_meshes.add(obj_id)
                 # vis.log_cam_pose(obj_label, o2w, static=False)
 
+        with hand_pose_path.open("r") as f:
+            hand_pose_data = json.load(f)
+        hands_data = hand_pose_data["hand_poses"]
+
+        for hand_id, hand_info in hands_data.items():
+            wrist_pose = np.array(hand_info["wrist_pose"]["matrix"], dtype=float)
+            # wrist_pose_cam = w2c @ wrist_pose
+            joint_angles = hand_info["joint_angles"]
+            axis_angle = matrix_to_axis_angle(torch.from_numpy(wrist_pose[:3, :3]).float())
+            global_vec = torch.cat([axis_angle, torch.from_numpy(wrist_pose[:3, 3]).float()])
+            # betas = hand_info.get("betas")
+            shape_params = torch.tensor(np.array(hand_info["betas"]), dtype=torch.float32)
+            is_right = torch.tensor(
+                [str(hand_info.get("handedness", hand_id)).lower() in ("1", "right")], dtype=torch.bool
+            )
+            vertices, _ = mano_model.forward_kinematics(
+                shape_params, torch.tensor(joint_angles, dtype=torch.float32), global_vec, is_right
+            )
+            vertices = (w2c[:3, :3] @ vertices.numpy().T + w2c[:3, 3:4]).T
+            faces = mano_model.mano_layer_right.faces if is_right[0] else mano_model.mano_layer_left.faces
+            hand_normals = HandDataProviderBase.get_triangular_mesh_normals(vertices, faces)
+            color_rgba = np.array([255, 80, 80, 255] if is_right[0] else [80, 140, 255, 255], dtype=np.uint8)
+            hand_colors = np.repeat(color_rgba[None, :], vertices.shape[0], axis=0)
+            rr.log(
+                f"world/hand/{'right' if is_right[0] else 'left'}/mesh",
+                rr.Mesh3D(
+                    vertex_positions=vertices,
+                    triangle_indices=faces,
+                    vertex_normals=hand_normals,
+                    vertex_colors=hand_colors,
+                ),
+                static=False,
+            )
 
 
 if __name__ == "__main__":
