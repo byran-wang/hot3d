@@ -20,6 +20,11 @@ def main(args):
     obj_assets_dir = data_dir.parents[2] / "assets"
     mano_model_dir = data_dir.parents[2] / "body_models"
     invalid_path = data_dir / "invalid_frames.txt"
+    obj_pose_in_cam_path = data_dir / "object_poses_in_cam"
+    hand_pose_in_cam_path = data_dir / "hand_poses_in_cam"
+    obj_pose_in_cam_path.mkdir(parents=True, exist_ok=True)
+    hand_pose_in_cam_path.mkdir(parents=True, exist_ok=True)
+
     mano_model = loadManoHandModel(str(mano_model_dir))
     invalid_frames = set()
     if invalid_path.exists():
@@ -82,11 +87,15 @@ def main(args):
         with obj_pose_path.open("r") as f:
             obj_data = json.load(f)
 
+        obj_cam_payload = {"objects": {}, "k_mat": k_mat.tolist()}
         for obj_id, obj_info in obj_data["objects"].items():
             obj_label = f"world/object/{obj_id}"
             mesh_path = obj_assets_dir / f"{obj_id}.glb"
             o2w = np.asarray(obj_info["T_world_object"]["matrix"], dtype=float)
             o2c = w2c @ o2w
+            obj_cam_payload["objects"][obj_id] = {
+                "T_camera_object": {"matrix": o2c.tolist()}
+            }
             if mesh_path.exists() and not args.headless:
                 mesh = trimesh.load(mesh_path)
                 if not isinstance(mesh, trimesh.Trimesh):
@@ -123,22 +132,33 @@ def main(args):
                     )
                 logged_meshes.add(obj_id)
                 # vis.log_cam_pose(obj_label, o2w, static=False)
+        obj_pose_cam_path = obj_pose_in_cam_path / obj_pose_path.name
+        with obj_pose_cam_path.open("w") as f:
+            json.dump(obj_cam_payload, f, indent=2)
 
         with hand_pose_path.open("r") as f:
             hand_pose_data = json.load(f)
         hands_data = hand_pose_data["hand_poses"]
 
+        hand_cam_payload = {"hand_poses": {}, "k_mat": k_mat.tolist()}
         for hand_id, hand_info in hands_data.items():
-            wrist_pose = np.array(hand_info["wrist_pose"]["matrix"], dtype=float)
-            # wrist_pose_cam = w2c @ wrist_pose
+            wrist_world = np.array(hand_info["wrist_pose"]["matrix"], dtype=float)
             joint_angles = hand_info["joint_angles"]
-            axis_angle = matrix_to_axis_angle(torch.from_numpy(wrist_pose[:3, :3]).float())
-            global_vec = torch.cat([axis_angle, torch.from_numpy(wrist_pose[:3, 3]).float()])
+            axis_angle = matrix_to_axis_angle(torch.from_numpy(wrist_world[:3, :3]).float())
+            global_vec = torch.cat([axis_angle, torch.from_numpy(wrist_world[:3, 3]).float()])
             # betas = hand_info.get("betas")
             shape_params = torch.tensor(np.array(hand_info["betas"]), dtype=torch.float32)
             is_right = torch.tensor(
                 [str(hand_info.get("handedness", hand_id)).lower() in ("1", "right")], dtype=torch.bool
             )
+            wrist_cam = w2c @ wrist_world
+            hand_cam_payload["hand_poses"][hand_id] = {
+                "handedness": hand_info.get("handedness"),
+                "wrist_pose": {"matrix": wrist_world.tolist()},
+                "w2c": {"matrix": w2c.tolist()},
+                "joint_angles": joint_angles,
+                "betas": hand_info.get("betas"),
+            }
             if args.headless:
                 continue
             vertices, _ = mano_model.forward_kinematics(
@@ -159,6 +179,9 @@ def main(args):
                 ),
                 static=False,
             )
+        hand_pose_cam_path = hand_pose_in_cam_path / hand_pose_path.name
+        with hand_pose_cam_path.open("w") as f:
+            json.dump(hand_cam_payload, f, indent=2)
 
 
 if __name__ == "__main__":
