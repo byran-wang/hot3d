@@ -61,20 +61,22 @@ def main(args):
                 if not isinstance(mesh, trimesh.Trimesh):
                     mesh = mesh.dump().sum()
                 vertices = mesh.vertices
+                vertices = (o2w[:3, :3] @ vertices.T + o2w[:3, 3:4]).T
                 faces = mesh.faces
                 if faces.shape[0] > 0:
                     keep = int(faces.shape[0] * 0.5)
                     if keep > 0:
                         indices = np.random.choice(faces.shape[0], keep, replace=False)
                         faces = faces[indices]
-                if obj_id not in logged_meshes:
+                # if obj_id not in logged_meshes:
+                if 1:
                     rr.log(
                         f"{obj_label}/mesh",
                         rr.Mesh3D(vertex_positions=vertices, triangle_indices=faces),
-                        static=True,
+                        static=False,
                     )
                 logged_meshes.add(obj_id)
-                vis.log_cam_pose(obj_label, o2w, static=False)
+                # vis.log_cam_pose(obj_label, o2w, static=False)
 
 
 
