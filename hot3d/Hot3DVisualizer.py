@@ -337,6 +337,13 @@ class Hot3DVisualizer:
             payload["timestamp_ns"] = int(hand_poses_with_dt.pose3d_collection.timestamp_ns)
             payload["time_delta_ns"] = int(hand_poses_with_dt.time_delta_ns)
             hands: Dict[str, Dict] = {}
+            mano_shape_params = getattr(self._hand_data_provider, "_mano_shape_params", None)
+            if mano_shape_params is not None:
+                mano_shape_params = (
+                    mano_shape_params.detach().cpu().numpy().tolist()
+                    if hasattr(mano_shape_params, "detach")
+                    else np.array(mano_shape_params).tolist()
+                )
             for hand_pose in hand_poses_with_dt.pose3d_collection.poses.values():
                 wrist_pose = (
                     Hot3DVisualizer._pose_to_json_dict(hand_pose.wrist_pose)
@@ -347,6 +354,7 @@ class Hot3DVisualizer:
                     "handedness": hand_pose.handedness.name.lower(),
                     "wrist_pose": wrist_pose,
                     "joint_angles": hand_pose.joint_angles,
+                    "betas": mano_shape_params,
                 }
             payload["hand_poses"] = hands
 
