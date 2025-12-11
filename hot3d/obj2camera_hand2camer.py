@@ -41,7 +41,8 @@ def main(args):
     hand_pose_paths = [image_path.parent / f"hand_poses/{image_path.stem.replace('214-1_', '')}.json" for image_path in image_paths]
 
     vis = Visualizer(viewer_name="hot3d_in_camera", jpeg_quality=30)
-    vis.log_axis("world", scale=0.1)
+    if not args.headless:
+        vis.log_axis("world", scale=0.1)
     logged_meshes = set()
 
     for idx, (image_path, cali_path, obj_pose_path, hand_pose_path) in enumerate(
@@ -55,7 +56,7 @@ def main(args):
             frame_num = int(stem_parts[-1])
         if frame_num is not None and frame_num in invalid_frames:
             continue
-        
+
         vis.set_time_sequence(idx)
         print(f"visualizing frame {idx}: {image_path.name}")
         with cali_path.open("r") as f:
@@ -69,10 +70,11 @@ def main(args):
         k_mat = np.array([[fx, 0.0, cx], [0.0, fy, cy], [0.0, 0.0, 1.0]], dtype=float)
         w2c = np.linalg.inv(c2w)
 
-        vis.log_image("world/image", str(image_path), static=False)
-        # vis.log_cam_pose("world/image", c2w, static=False)
-        vis.log_cam_pose("world/image", np.eye(4), static=False)
-        vis.log_calibration("world/image", resolution, k_mat, static=False)
+        if not args.headless:
+            vis.log_image("world/image", str(image_path), static=False)
+            # vis.log_cam_pose("world/image", c2w, static=False)
+            vis.log_cam_pose("world/image", np.eye(4), static=False)
+            vis.log_calibration("world/image", resolution, k_mat, static=False)
         if not obj_assets_dir.exists():
             print(f"[Warning] Object assets directory {obj_assets_dir} does not exist, skipping object visualization.")
             continue
@@ -85,7 +87,7 @@ def main(args):
             mesh_path = obj_assets_dir / f"{obj_id}.glb"
             o2w = np.asarray(obj_info["T_world_object"]["matrix"], dtype=float)
             o2c = w2c @ o2w
-            if mesh_path.exists():
+            if mesh_path.exists() and not args.headless:
                 mesh = trimesh.load(mesh_path)
                 if not isinstance(mesh, trimesh.Trimesh):
                     mesh = mesh.dump().sum()
@@ -137,6 +139,8 @@ def main(args):
             is_right = torch.tensor(
                 [str(hand_info.get("handedness", hand_id)).lower() in ("1", "right")], dtype=torch.bool
             )
+            if args.headless:
+                continue
             vertices, _ = mano_model.forward_kinematics(
                 shape_params, torch.tensor(joint_angles, dtype=torch.float32), global_vec, is_right
             )
@@ -162,6 +166,7 @@ if __name__ == "__main__":
     parser.add_argument("--data_dir", type=str, default="./dataset/P0012_ca1f6626/processed/undistorted", help="Path to the data directory.")
     parser.add_argument("--out_dir", type=str, default="./dataset/P0012_ca1f6626/processed/undistorted", help="Path to the output directory.")
     parser.add_argument("--interval", type=int, default=1, help="Interval between frames to process and save.")
+    parser.add_argument("--headless", action="store_true", help="If set, skip logging camera/images/meshes.")
 
     args = parser.parse_args()
     main(args)
