@@ -26,10 +26,7 @@ def main(args):
     logged_meshes = set()
 
     for idx, (image_path, cali_path, obj_pose_path) in enumerate(zip(image_paths, cali_paths, obj_pose_paths)):
-        if idx == 0:
-            with cali_path.open("r") as f:
-                cali_data = json.load(f)
-            c12w = np.asarray(cali_data["c2w"], dtype=float)
+
 
         if idx % args.interval != 0:
             continue
@@ -38,7 +35,7 @@ def main(args):
         with cali_path.open("r") as f:
             cali_data = json.load(f)
 
-        c2c1 = np.linalg.inv(c12w) @ np.asarray(cali_data["c2w"], dtype=float)
+        c2w = np.asarray(cali_data["c2w"], dtype=float)
         intrinsics = cali_data["intrinsics"]
         fx, fy = intrinsics["focal_length"]
         cx, cy = intrinsics["principal_point"]
@@ -46,7 +43,7 @@ def main(args):
         k_mat = np.array([[fx, 0.0, cx], [0.0, fy, cy], [0.0, 0.0, 1.0]], dtype=float)
 
         vis.log_image("world/image", str(image_path), static=False)
-        vis.log_cam_pose("world/image", c2c1, static=False)
+        vis.log_cam_pose("world/image", c2w, static=False)
         vis.log_calibration("world/image", resolution, k_mat, static=False)
         if not obj_assets_dir.exists():
             print(f"[Warning] Object assets directory {obj_assets_dir} does not exist, skipping object visualization.")
@@ -58,7 +55,7 @@ def main(args):
         for obj_id, obj_info in obj_data["objects"].items():
             obj_label = f"world/object/{obj_id}"
             mesh_path = obj_assets_dir / f"{obj_id}.glb"
-            o2c1 = np.linalg.inv(c12w) @ np.asarray(obj_info["T_world_object"]["matrix"], dtype=float)
+            o2w = np.asarray(obj_info["T_world_object"]["matrix"], dtype=float)
             if mesh_path.exists():
                 mesh = trimesh.load(mesh_path)
                 if not isinstance(mesh, trimesh.Trimesh):
@@ -70,13 +67,14 @@ def main(args):
                     if keep > 0:
                         indices = np.random.choice(faces.shape[0], keep, replace=False)
                         faces = faces[indices]
-                vertices = (o2c1[:3, :3] @ vertices.T + o2c1[:3, 3:4]).T
-                rr.log(
-                    f"{obj_label}/mesh",
-                    rr.Mesh3D(vertex_positions=vertices, triangle_indices=faces),
-                    static=False,
-                )
+                if obj_id not in logged_meshes:
+                    rr.log(
+                        f"{obj_label}/mesh",
+                        rr.Mesh3D(vertex_positions=vertices, triangle_indices=faces),
+                        static=True,
+                    )
                 logged_meshes.add(obj_id)
+                vis.log_cam_pose(obj_label, o2w, static=False)
 
 
 
